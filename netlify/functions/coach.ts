@@ -1,5 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk'
 
+async function urlToBase64(url: string): Promise<{ data: string; mediaType: string } | null> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) return null
+    const contentType = res.headers.get('content-type') ?? 'image/jpeg'
+    const mediaType = contentType.split(';')[0].trim()
+    const buffer = await res.arrayBuffer()
+    const data = Buffer.from(buffer).toString('base64')
+    return { data, mediaType }
+  } catch {
+    return null
+  }
+}
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
@@ -22,20 +36,28 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Prompt inválido' }), { status: 400 })
   }
 
-  const validImageUrls = imageUrls.slice(0, 4).filter(url => {
-    try { new URL(url); return true } catch { return false }
-  })
-
   try {
     const client = new Anthropic({ apiKey })
 
     const content: Anthropic.Messages.ContentBlockParam[] = []
 
-    for (const url of validImageUrls) {
-      content.push({
-        type: 'image',
-        source: { type: 'url', url },
-      } as Anthropic.Messages.ImageBlockParam)
+    // Fetch images and convert to base64
+    const validUrls = imageUrls.slice(0, 4).filter(url => {
+      try { new URL(url); return true } catch { return false }
+    })
+
+    for (const url of validUrls) {
+      const img = await urlToBase64(url)
+      if (img) {
+        content.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: img.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+            data: img.data,
+          },
+        })
+      }
     }
 
     content.push({ type: 'text', text: prompt })
