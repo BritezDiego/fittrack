@@ -1,0 +1,111 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-neon: #7BF0A0;
+  --color-neon-dim: #4ade80;
+  --color-bg: #0a0a0a;
+  --color-surface: #111111;
+  --color-surface-2: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-muted: #666666;
+  --color-text: #f0f0f0;
+
+  --font-syne: 'Syne', sans-serif;
+  --font-dm: 'DM Sans', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-dm);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-syne);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
+
+/* Neon glow */
+.neon-glow {
+  box-shadow: 0 0 20px rgba(123, 240, 160, 0.3), 0 0 40px rgba(123, 240, 160, 0.1);
+}
+
+.neon-text {
+  text-shadow: 0 0 20px rgba(123, 240, 160, 0.5);
+}
+
+/* Input base */
+.input-base {
+  width: 100%;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  color: var(--color-text);
+  font-family: var(--font-dm);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.input-base:focus {
+  border-color: var(--color-neon);
+}
+.input-base::placeholder {
+  color: var(--color-muted);
+}
+
+/* Button primary */
+.btn-primary {
+  background: var(--color-neon);
+  color: #0a0a0a;
+  font-family: var(--font-syne);
+  font-weight: 700;
+  border-radius: 12px;
+  padding: 14px 24px;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  width: 100%;
+  font-size: 15px;
+}
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Button ghost */
+.btn-ghost {
+  background: transparent;
+  color: var(--color-neon);
+  font-family: var(--font-syne);
+  font-weight: 600;
+  border-radius: 12px;
+  padding: 12px 24px;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  font-size: 14px;
+}
+.btn-ghost:hover { border-color: var(--color-neon); background: rgba(123, 240, 160, 0.05); }
+
+/* Card */
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 20px;
+  padding: 20px;
+}
+
+/* Tab bar height */
+.tab-bar-height { height: 72px; }
+.main-content { padding-bottom: 88px; }
