@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
+import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS } from '../types'
 import { Camera, X, Check } from 'lucide-react'
@@ -16,6 +17,7 @@ const now = new Date()
 export function CheckinPage() {
   const { user } = useAuth()
   const { saveCheckin } = useCheckins(user?.id)
+  const { profile, updateProfile } = useProfile(user?.id)
   const navigate = useNavigate()
 
   const [mes, setMes] = useState(now.getMonth() + 1)
@@ -23,6 +25,8 @@ export function CheckinPage() {
   const [medidas, setMedidas] = useState<Record<string, string>>(
     Object.fromEntries(MEDIDAS_KEYS.map(k => [k, '']))
   )
+  const [edad, setEdad] = useState('')
+  const [altura, setAltura] = useState('')
   const [notas, setNotas] = useState('')
   const [fotos, setFotos] = useState<{ file: File; tipo: CheckinFoto['tipo']; preview: string }[]>([])
   const [saving, setSaving] = useState(false)
@@ -59,6 +63,10 @@ export function CheckinPage() {
     })
   }
 
+  // Pre-fill edad/altura from profile when loaded
+  const edadValue = edad || (profile?.edad?.toString() ?? '')
+  const alturaValue = altura || (profile?.altura?.toString() ?? '')
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
@@ -73,10 +81,13 @@ export function CheckinPage() {
       ),
     } as any
 
-    const { error } = await saveCheckin(
-      checkinData,
-      fotos.map(f => ({ file: f.file, tipo: f.tipo }))
-    )
+    const [{ error }] = await Promise.all([
+      saveCheckin(checkinData, fotos.map(f => ({ file: f.file, tipo: f.tipo }))),
+      updateProfile({
+        ...(edadValue ? { edad: parseInt(edadValue) } : {}),
+        ...(alturaValue ? { altura: parseFloat(alturaValue) } : {}),
+      }),
+    ])
 
     setSaving(false)
     if (error) {
@@ -133,6 +144,37 @@ export function CheckinPage() {
                 onChange={e => setAnio(Number(e.target.value))}
                 min={2020}
                 max={2099}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Datos personales */}
+        <div className="card">
+          <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+            DATOS PERSONALES
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: 'var(--color-muted)' }}>Edad (años)</label>
+              <input
+                className="input-base"
+                type="text"
+                inputMode="numeric"
+                placeholder="Ej: 28"
+                value={edadValue}
+                onChange={e => setEdad(e.target.value.replace(/\D/g, ''))}
+              />
+            </div>
+            <div>
+              <label className="block text-xs mb-1.5" style={{ color: 'var(--color-muted)' }}>Altura (cm)</label>
+              <input
+                className="input-base"
+                type="text"
+                inputMode="decimal"
+                placeholder="Ej: 170"
+                value={alturaValue}
+                onChange={e => { if (e.target.value === '' || /^\d*\.?\d*$/.test(e.target.value)) setAltura(e.target.value) }}
               />
             </div>
           </div>
