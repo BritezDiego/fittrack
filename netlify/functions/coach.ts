@@ -36,53 +36,69 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Prompt inválido' }), { status: 400 })
   }
 
-  try {
-    const client = new Anthropic({ apiKey })
+  const client = new Anthropic({ apiKey })
 
-    const content: Anthropic.Messages.ContentBlockParam[] = []
+  const content: Anthropic.Messages.ContentBlockParam[] = []
 
-    // Fetch images and convert to base64
-    const validUrls = imageUrls.slice(0, 4).filter(url => {
-      try { new URL(url); return true } catch { return false }
-    })
+  const validUrls = imageUrls.slice(0, 4).filter(url => {
+    try { new URL(url); return true } catch { return false }
+  })
 
-    for (const url of validUrls) {
-      const img = await urlToBase64(url)
-      if (img) {
-        content.push({
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: img.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-            data: img.data,
-          },
-        })
-      }
+  for (const url of validUrls) {
+    const img = await urlToBase64(url)
+    if (img) {
+      content.push({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: img.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
+          data: img.data,
+        },
+      })
     }
-
-    content.push({ type: 'text', text: prompt })
-
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      messages: [{ role: 'user', content }],
-    })
-
-    const responseContent = message.content
-      .filter(b => b.type === 'text')
-      .map(b => (b as Anthropic.Messages.TextBlock).text)
-      .join('\n')
-
-    return new Response(JSON.stringify({ content: responseContent }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err.message ?? 'Error al llamar a la API' }),
-      { status: 500 }
-    )
   }
+
+  content.push({ type: 'text', text: prompt })
+
+  const encoder = new TextEncoder()
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const anthropicStream = client.messages.stream({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 2048,
+          messages: [{ role: 'user', content }],
+        })
+
+        for await (const chunk of anthropicStream) {
+          if (
+            chunk.type === 'content_block_delta' &&
+            chunk.delta.type === 'text_delta'
+          ) {
+            const data = JSON.stringify({ text: chunk.delta.text })
+            controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+          }
+        }
+
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+      } catch (err: any) {
+        const data = JSON.stringify({ error: err.message ?? 'Error en la API' })
+        controller.enqueue(encoder.encode(`data: ${data}\n\n`))
+      } finally {
+        controller.close()
+      }
+    },
+  })
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  })
 }
 
 export const config = { path: '/api/coach', timeout: 26 }

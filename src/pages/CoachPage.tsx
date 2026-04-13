@@ -121,10 +121,37 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
         throw new Error(data.error ?? `Error ${response.status}`)
       }
 
-      const data = await response.json()
-      setResult(data.content)
+      const reader = response.body!.getReader()
+      const decoder = new TextDecoder()
+      let fullText = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const raw = line.slice(6).trim()
+          if (raw === '[DONE]') break
+          try {
+            const parsed = JSON.parse(raw)
+            if (parsed.error) throw new Error(parsed.error)
+            if (parsed.text) {
+              fullText += parsed.text
+              setResult(fullText)
+            }
+          } catch (parseErr: any) {
+            if (parseErr.message && !parseErr.message.includes('JSON')) {
+              throw parseErr
+            }
+          }
+        }
+      }
     } catch (err: any) {
-      setError(err.message ?? 'Error al conectar con el Coach IA. Verificá tu API key.')
+      setError(err.message ?? 'Error al conectar con el Coach IA.')
     } finally {
       setLoading(false)
     }
