@@ -25,6 +25,7 @@ export function CoachPage() {
   )
   const [dias, setDias] = useState(3)
   const [restricciones, setRestricciones] = useState('')
+  const [instrucciones, setInstrucciones] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -61,6 +62,10 @@ export function CoachPage() {
       ? `\nFOTOS DEL ÚLTIMO CHECK-IN: Se adjuntan ${checkinImageUrls.length} foto(s) del cuerpo del usuario. Analiza visualmente la composición corporal, distribución de grasa y masa muscular visible para personalizar aún más el plan.\n`
       : ''
 
+    const instruccionesContext = instrucciones.trim()
+      ? `\nINSTRUCCIONES ESPECÍFICAS DEL USUARIO (prioridad alta — el plan debe girar en torno a esto):\n${instrucciones.trim()}\n`
+      : ''
+
     if (planType === 'rutina') {
       return `Eres un coach fitness experto. Genera una rutina semanal detallada y personalizada.
 
@@ -69,13 +74,13 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-${imageContext}
+${imageContext}${instruccionesContext}
 Genera una RUTINA SEMANAL con:
 - Distribución clara de días (ej: Lunes - Pecho/Tríceps, etc.)
 - Para cada ejercicio: series, repeticiones, descanso y notas de forma
 - Calentamiento y enfriamiento
 - Progresión sugerida para las próximas semanas
-- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}
+- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}${instrucciones.trim() ? '\n- Asegurate de que las instrucciones específicas del usuario sean el eje central del plan' : ''}
 
 Formato: usa markdown con headers (##), listas y tablas donde sea útil. Sé específico y práctico.`
     } else {
@@ -86,14 +91,14 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-${imageContext}
+${imageContext}${instruccionesContext}
 Genera un PLAN DE ALIMENTACIÓN con:
 - Calorías totales diarias recomendadas (con cálculo basado en datos)
 - Distribución de macros (proteínas, carbohidratos, grasas) en gramos y porcentajes
 - Plan de comidas para un día típico (desayuno, almuerzo, merienda, cena, snacks)
 - Lista de alimentos recomendados y a evitar
 - Timing de nutrientes alrededor del entrenamiento
-- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}
+- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}${instrucciones.trim() ? '\n- El plan debe reflejar las instrucciones específicas del usuario como prioridad' : ''}
 
 Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutricionales aproximados.`
     }
@@ -250,6 +255,21 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
             placeholder="Ej: lesión de rodilla, vegetariano, sin gluten…"
             value={restricciones}
             onChange={e => setRestricciones(e.target.value)}
+          />
+        </div>
+
+        {/* Instrucciones personalizadas */}
+        <div>
+          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+            INSTRUCCIONES AL COACH <span style={{ color: 'var(--color-muted)', fontWeight: 400 }}>(opcional)</span>
+          </label>
+          <textarea
+            className="input-base"
+            rows={3}
+            placeholder="Ej: quiero enfocarme en crecimiento de glúteos, prefiero ejercicios sin máquinas, me gustaría más proteína en el desayuno…"
+            value={instrucciones}
+            onChange={e => setInstrucciones(e.target.value)}
+            style={{ resize: 'none' }}
           />
         </div>
       </div>
