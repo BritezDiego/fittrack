@@ -6,14 +6,23 @@ import {
 } from 'recharts'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS } from '../types'
 import type { MedidaKey } from '../types'
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Trash2 } from 'lucide-react'
 
 export function DashboardPage() {
   const { user } = useAuth()
-  const { checkins, loading } = useCheckins(user?.id)
+  const { checkins, loading, deleteCheckin } = useCheckins(user?.id)
   const [activeMedida, setActiveMedida] = useState<MedidaKey>('peso')
   const [compareA, setCompareA] = useState<string>('')
   const [compareB, setCompareB] = useState<string>('')
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async (id: string) => {
+    setDeleting(true)
+    await deleteCheckin(id)
+    setConfirmDelete(null)
+    setDeleting(false)
+  }
 
   if (loading) return <LoadingSkeleton />
 
@@ -149,31 +158,72 @@ export function DashboardPage() {
         )}
       </div>
 
+      {/* Historial */}
+      <p className="text-xs font-medium mb-3 mt-6" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+        HISTORIAL DE CHECK-INS
+      </p>
+      <div className="flex flex-col gap-2">
+        {[...checkins].reverse().map(c => (
+          <div key={c.id} className="card flex items-center justify-between gap-3 py-3">
+            <div>
+              <p className="text-sm font-bold" style={{ fontFamily: 'Syne' }}>
+                {MES_LABELS[c.mes]} {c.anio}
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                {[
+                  c.peso && `${c.peso} kg`,
+                  c.cintura && `cintura ${c.cintura} cm`,
+                  c.checkin_fotos?.length && `${c.checkin_fotos.length} foto${c.checkin_fotos.length > 1 ? 's' : ''}`,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            {confirmDelete === c.id ? (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => setConfirmDelete(null)}
+                  className="text-xs px-2 py-1 rounded-lg"
+                  style={{ color: 'var(--color-muted)', background: 'var(--color-surface-2)' }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  disabled={deleting}
+                  className="text-xs px-2 py-1 rounded-lg"
+                  style={{ color: '#f87171', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)' }}
+                >
+                  {deleting ? '…' : 'Confirmar'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setConfirmDelete(c.id)}
+                className="shrink-0 p-2 rounded-lg transition-all"
+                style={{ color: 'var(--color-muted)', background: 'var(--color-surface-2)' }}
+              >
+                <Trash2 size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+
       {/* Comparativa */}
       {checkins.length >= 2 && (
         <>
-          <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+          <p className="text-xs font-medium mb-3 mt-6" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
             COMPARAR DOS MESES
           </p>
           <div className="flex gap-3 mb-4">
-            <select
-              className="input-base"
-              value={compareA}
-              onChange={(e) => setCompareA(e.target.value)}
-            >
+            <select className="input-base" value={compareA} onChange={e => setCompareA(e.target.value)}>
               <option value="">Mes A</option>
               {checkinOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <select
-              className="input-base"
-              value={compareB}
-              onChange={(e) => setCompareB(e.target.value)}
-            >
+            <select className="input-base" value={compareB} onChange={e => setCompareB(e.target.value)}>
               <option value="">Mes B</option>
               {checkinOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
-
           {cA && cB && (
             <div className="card overflow-hidden">
               <div className="grid grid-cols-3 gap-0">

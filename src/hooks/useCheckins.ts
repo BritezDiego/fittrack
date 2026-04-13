@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import type { Checkin, CheckinFoto, CheckinWithFotos } from '../types'
 
+function getStoragePath(url: string): string | null {
+  const marker = '/checkin-fotos/'
+  const idx = url.indexOf(marker)
+  return idx !== -1 ? decodeURIComponent(url.slice(idx + marker.length).split('?')[0]) : null
+}
+
 export function useCheckins(userId: string | undefined) {
   const [checkins, setCheckins] = useState<CheckinWithFotos[]>([])
   const [loading, setLoading] = useState(true)
@@ -35,17 +41,10 @@ export function useCheckins(userId: string | undefined) {
 
     const toDelete = withPhotos.slice(0, withPhotos.length - 3)
     for (const checkin of toDelete) {
-      const storagePaths = (checkin.checkin_fotos as CheckinFoto[])
-        .map(f => {
-          const marker = '/checkin-fotos/'
-          const idx = f.url.indexOf(marker)
-          return idx !== -1 ? decodeURIComponent(f.url.slice(idx + marker.length).split('?')[0]) : null
-        })
+      const paths = (checkin.checkin_fotos as CheckinFoto[])
+        .map(f => getStoragePath(f.url))
         .filter((p): p is string => p !== null)
-
-      if (storagePaths.length > 0) {
-        await supabase.storage.from('checkin-fotos').remove(storagePaths)
-      }
+      if (paths.length) await supabase.storage.from('checkin-fotos').remove(paths)
       await supabase.from('checkin_fotos').delete().eq('checkin_id', checkin.id)
     }
   }
@@ -56,7 +55,6 @@ export function useCheckins(userId: string | undefined) {
   ) => {
     if (!userId) return { error: new Error('No user') }
 
-    // Upsert checkin
     const { data: savedCheckin, error: checkinError } = await supabase
       .from('checkins')
       .upsert(
@@ -68,7 +66,6 @@ export function useCheckins(userId: string | undefined) {
 
     if (checkinError) return { error: checkinError }
 
-    // Upload photos (max 5 per set)
     const uploadedFotos: Omit<CheckinFoto, 'id' | 'created_at'>[] = []
     for (const { file, tipo } of files.slice(0, 5)) {
       const ext = file.name.split('.').pop()
@@ -93,10 +90,39 @@ export function useCheckins(userId: string | undefined) {
     return { data: savedCheckin, error: null }
   }
 
+  // Elimina el check-in completo: fotos de storage, registros DB y medidas
   const deleteCheckin = async (id: string) => {
+    const checkin = checkins.find(c => c.id === id)
+    if (checkin?.checkin_fotos?.length) {
+      const paths = checkin.checkin_fotos
+        .map(f => getStoragePath(f.url))
+        .filter((p): p is string => p !== null)
+      if (paths.length) await supabase.storage.from('checkin-fotos').remove(paths)
+      await supabase.from('checkin_fotos').delete().eq('checkin_id', id)
+    }
     await supabase.from('checkins').delete().eq('id', id)
     await fetchCheckins()
   }
 
-  return { checkins, loading, saveCheckin, deleteCheckin, refetch: fetchCheckins }
+  // Elimina solo las fotos de un check-in (deja las medidas intactas)
+  const deleteFotos = async (checkinId: string) => {
+    const checkin = checkins.find(c => c.id === checkinId)
+    if (!checkin?.checkin_fotos?.length) return
+    const paths = checkin.checkin_fotos
+      .map(f => getStoragePath(f.url))
+      .filter((p): p is string => p !== null)
+    if (paths.length) await supabase.storage.from('checkin-fotos').remove(paths)
+    await supabase.from('checkin_fotos').delete().eq('checkin_id', checkinId)
+    await fetchCheckins()
+  }
+
+  // Elimina una sola foto
+  const deleteFoto = async (foto: CheckinFoto) => {
+    const path = getStoragePath(foto.url)
+    if (path) await supabase.storage.from('checkin-fotos').remove([path])
+    await supabase.from('checkin_fotos').delete().eq('id', foto.id)
+    await fetchCheckins()
+  }
+
+  return { checkins, loading, saveCheckin, deleteCheckin, deleteFotos, deleteFoto, refetch: fetchCheckins }
 }
