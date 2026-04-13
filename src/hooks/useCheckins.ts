@@ -20,6 +20,36 @@ export function useCheckins(userId: string | undefined) {
 
   useEffect(() => { fetchCheckins() }, [userId])
 
+  const cleanupOldPhotoSets = async () => {
+    if (!userId) return
+    const { data } = await supabase
+      .from('checkins')
+      .select('id, mes, anio, checkin_fotos(*)')
+      .eq('user_id', userId)
+      .order('anio', { ascending: true })
+      .order('mes', { ascending: true })
+
+    if (!data) return
+    const withPhotos = data.filter((c: any) => c.checkin_fotos?.length > 0)
+    if (withPhotos.length <= 3) return
+
+    const toDelete = withPhotos.slice(0, withPhotos.length - 3)
+    for (const checkin of toDelete) {
+      const storagePaths = (checkin.checkin_fotos as CheckinFoto[])
+        .map(f => {
+          const marker = '/checkin-fotos/'
+          const idx = f.url.indexOf(marker)
+          return idx !== -1 ? decodeURIComponent(f.url.slice(idx + marker.length).split('?')[0]) : null
+        })
+        .filter((p): p is string => p !== null)
+
+      if (storagePaths.length > 0) {
+        await supabase.storage.from('checkin-fotos').remove(storagePaths)
+      }
+      await supabase.from('checkin_fotos').delete().eq('checkin_id', checkin.id)
+    }
+  }
+
   const saveCheckin = async (
     checkin: Omit<Checkin, 'id' | 'user_id' | 'created_at'>,
     files: { file: File; tipo: CheckinFoto['tipo'] }[]
@@ -38,9 +68,9 @@ export function useCheckins(userId: string | undefined) {
 
     if (checkinError) return { error: checkinError }
 
-    // Upload photos
+    // Upload photos (max 5 per set)
     const uploadedFotos: Omit<CheckinFoto, 'id' | 'created_at'>[] = []
-    for (const { file, tipo } of files) {
+    for (const { file, tipo } of files.slice(0, 5)) {
       const ext = file.name.split('.').pop()
       const path = `${userId}/${savedCheckin.id}/${tipo}_${Date.now()}.${ext}`
       const { error: uploadError } = await supabase.storage
@@ -56,6 +86,7 @@ export function useCheckins(userId: string | undefined) {
 
     if (uploadedFotos.length > 0) {
       await supabase.from('checkin_fotos').insert(uploadedFotos)
+      await cleanupOldPhotoSets()
     }
 
     await fetchCheckins()

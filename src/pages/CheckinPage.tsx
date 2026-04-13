@@ -39,8 +39,8 @@ export function CheckinPage() {
 
   const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (fotos.length + files.length > 6) {
-      setError('Máximo 6 fotos permitidas.')
+    if (fotos.length + files.length > 5) {
+      setError('Máximo 5 fotos permitidas.')
       return
     }
     const newFotos = files.map((file) => ({
@@ -91,7 +91,7 @@ export function CheckinPage() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] gap-4">
         <div className="w-20 h-20 rounded-full flex items-center justify-center neon-glow"
-             style={{ background: 'rgba(123,240,160,0.15)', border: '2px solid #7BF0A0' }}>
+             style={{ background: 'rgba(123,240,150,0.15)', border: '2px solid #7BF0A0' }}>
           <Check size={40} color="#7BF0A0" />
         </div>
         <h2 className="text-2xl font-bold" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>
@@ -103,13 +103,13 @@ export function CheckinPage() {
   }
 
   return (
-    <div className="px-4 pt-8 pb-6">
+    <div className="px-4 pt-8 pb-5">
       <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: 'Syne' }}>Check-in mensual</h1>
-      <p className="text-sm mb-6" style={{ color: 'var(--color-muted)' }}>
+      <p className="text-sm mb-5" style={{ color: 'var(--color-muted)' }}>
         Registrá tus medidas de este mes
       </p>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Mes/Año */}
         <div className="card">
           <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
@@ -181,7 +181,7 @@ export function CheckinPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-medium" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
-              FOTOS ({fotos.length}/6)
+              FOTOS ({fotos.length}/5)
             </p>
           </div>
 
@@ -219,14 +219,14 @@ export function CheckinPage() {
                 <button
                   type="button"
                   onClick={() => removeFoto(i)}
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full flex items-center justify-center"
+                  className="absolute top-1 right-1 w-5 h-5 rounded-full flex items-center justify-center"
                   style={{ background: 'rgba(0,0,0,0.7)' }}
                 >
                   <X size={12} color="white" />
                 </button>
               </div>
             ))}
-            {fotos.length < 6 && (
+            {fotos.length < 5 && (
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -255,7 +255,7 @@ export function CheckinPage() {
 
         {error && (
           <div className="rounded-xl px-4 py-3 text-sm"
-               style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+               style={{ background: 'rgba(239,58,58,0.1)', border: '1px solid rgba(239,58,58,0.3)', color: '#f87171' }}>
             {error}
           </div>
         )}
