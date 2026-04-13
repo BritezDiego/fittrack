@@ -55,6 +55,18 @@ export function useCheckins(userId: string | undefined) {
   ) => {
     if (!userId) return { error: new Error('No user') }
 
+    // Si hay fotos nuevas y existe un check-in previo para ese mes/año, borrar las fotos viejas
+    if (files.length > 0) {
+      const existing = checkins.find(c => c.mes === checkin.mes && c.anio === checkin.anio)
+      if (existing?.checkin_fotos?.length) {
+        const paths = existing.checkin_fotos
+          .map(f => getStoragePath(f.url))
+          .filter((p): p is string => p !== null)
+        if (paths.length) await supabase.storage.from('checkin-fotos').remove(paths)
+        await supabase.from('checkin_fotos').delete().eq('checkin_id', existing.id)
+      }
+    }
+
     const { data: savedCheckin, error: checkinError } = await supabase
       .from('checkins')
       .upsert(

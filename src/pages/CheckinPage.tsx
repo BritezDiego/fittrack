@@ -4,7 +4,7 @@ import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS } from '../types'
-import { Camera, X, Check } from 'lucide-react'
+import { Camera, X, Check, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 const FOTO_TIPOS: CheckinFoto['tipo'][] = ['frente', 'perfil', 'espalda', 'extra']
@@ -16,7 +16,7 @@ const now = new Date()
 
 export function CheckinPage() {
   const { user } = useAuth()
-  const { saveCheckin } = useCheckins(user?.id)
+  const { checkins, saveCheckin } = useCheckins(user?.id)
   const { profile, updateProfile } = useProfile(user?.id)
   const navigate = useNavigate()
 
@@ -34,6 +34,26 @@ export function CheckinPage() {
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingTipo, setPendingTipo] = useState<CheckinFoto['tipo']>('frente')
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  // Detecta si el mes/año actual ya tiene un check-in
+  const existingThisMonth = checkins.find(c => c.mes === mes && c.anio === anio)
+  const isUpdate = !!existingThisMonth
+
+  const loadCheckin = (id: string) => {
+    const c = checkins.find(ch => ch.id === id)
+    if (!c) return
+    setMes(c.mes)
+    setAnio(c.anio)
+    setMedidas(Object.fromEntries(MEDIDAS_KEYS.map(k => [k, c[k] != null ? String(c[k]) : ''])))
+    setNotas(c.notas ?? '')
+    setEdad(profile?.edad?.toString() ?? '')
+    setAltura(profile?.altura?.toString() ?? '')
+    setFotos([])
+    setEditingId(id)
+    setError(null)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const handleMedida = (key: string, val: string) => {
     if (val === '' || /^\d*\.?\d*$/.test(val)) {
@@ -116,9 +136,46 @@ export function CheckinPage() {
   return (
     <div className="px-4 pt-8 pb-5">
       <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: 'Syne' }}>Check-in mensual</h1>
-      <p className="text-sm mb-5" style={{ color: 'var(--color-muted)' }}>
+      <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
         Registrá tus medidas de este mes
       </p>
+
+      {/* Check-ins anteriores para cargar */}
+      {checkins.length > 0 && (
+        <div className="mb-5">
+          <p className="text-xs font-medium mb-2" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+            CARGAR REGISTRO ANTERIOR
+          </p>
+          <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            {[...checkins].reverse().map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => loadCheckin(c.id)}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs transition-all"
+                style={{
+                  fontFamily: 'Syne',
+                  background: editingId === c.id ? 'rgba(123,240,160,0.12)' : 'var(--color-surface)',
+                  border: '1px solid',
+                  borderColor: editingId === c.id ? '#7BF0A0' : 'var(--color-border)',
+                  color: editingId === c.id ? '#7BF0A0' : 'var(--color-muted)',
+                }}
+              >
+                <RefreshCw size={11} />
+                {MES_LABELS[c.mes]} {c.anio}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Banner modo actualización */}
+      {isUpdate && (
+        <div className="rounded-xl px-4 py-2.5 mb-4 text-xs"
+             style={{ background: 'rgba(123,240,160,0.07)', border: '1px solid rgba(123,240,160,0.25)', color: '#7BF0A0', fontFamily: 'Syne' }}>
+          ↻ Actualizando check-in de <strong>{MES_LABELS[mes]} {anio}</strong> — los datos anteriores serán reemplazados
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* Mes/Año */}
@@ -303,7 +360,7 @@ export function CheckinPage() {
         )}
 
         <button type="submit" className="btn-primary" disabled={saving}>
-          {saving ? 'Guardando…' : 'Guardar check-in'}
+          {saving ? 'Guardando…' : isUpdate ? `Actualizar ${MES_LABELS[mes]} ${anio}` : 'Guardar check-in'}
         </button>
       </form>
     </div>
