@@ -30,6 +30,9 @@ export function CoachPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
+  const checkinImageUrls = lastCheckin?.checkin_fotos?.map(f => f.url) ?? []
+  const hasImages = checkinImageUrls.length > 0
+
   const buildPrompt = () => {
     const userData = [
       profile?.nombre && `Nombre: ${profile.nombre}`,
@@ -54,6 +57,10 @@ export function CoachPage() {
         ].filter(Boolean).join('\n')
       : 'Sin check-in registrado aún.'
 
+    const imageContext = hasImages
+      ? `\nFOTOS DEL ÚLTIMO CHECK-IN: Se adjuntan ${checkinImageUrls.length} foto(s) del cuerpo del usuario. Analiza visualmente la composición corporal, distribución de grasa y masa muscular visible para personalizar aún más el plan.\n`
+      : ''
+
     if (planType === 'rutina') {
       return `Eres un coach fitness experto. Genera una rutina semanal detallada y personalizada.
 
@@ -62,13 +69,13 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-
+${imageContext}
 Genera una RUTINA SEMANAL con:
 - Distribución clara de días (ej: Lunes - Pecho/Tríceps, etc.)
 - Para cada ejercicio: series, repeticiones, descanso y notas de forma
 - Calentamiento y enfriamiento
 - Progresión sugerida para las próximas semanas
-- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}
+- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}
 
 Formato: usa markdown con headers (##), listas y tablas donde sea útil. Sé específico y práctico.`
     } else {
@@ -79,14 +86,14 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-
+${imageContext}
 Genera un PLAN DE ALIMENTACIÓN con:
 - Calorías totales diarias recomendadas (con cálculo basado en datos)
 - Distribución de macros (proteínas, carbohidratos, grasas) en gramos y porcentajes
 - Plan de comidas para un día típico (desayuno, almuerzo, merienda, cena, snacks)
 - Lista de alimentos recomendados y a evitar
 - Timing de nutrientes alrededor del entrenamiento
-- Tips específicos para ${OBJETIVO_LABELS[objetivo]}
+- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}
 
 Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutricionales aproximados.`
     }
@@ -101,7 +108,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
       const response = await fetch('/api/coach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: buildPrompt() }),
+        body: JSON.stringify({ prompt: buildPrompt(), imageUrls: checkinImageUrls }),
       })
 
       if (!response.ok) {
@@ -249,10 +256,18 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 
       {/* Context preview */}
       {lastCheckin && (
-        <div className="rounded-xl px-4 py-3 mb-5 text-xs"
+        <div className="rounded-xl px-4 py-3 mb-5 text-xs flex flex-col gap-1"
              style={{ background: 'rgba(123,240,160,0.05)', border: '1px solid rgba(123,240,160,0.2)', color: 'var(--color-muted)' }}>
-          <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Último check-in incluido: </span>
-          {MES_LABELS[lastCheckin.mes]} {lastCheckin.anio} — {lastCheckin.peso ?? '?'}kg
+          <div>
+            <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Último check-in incluido: </span>
+            {MES_LABELS[lastCheckin.mes]} {lastCheckin.anio} — {lastCheckin.peso ?? '?'}kg
+          </div>
+          {hasImages && (
+            <div>
+              <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos para análisis visual: </span>
+              {checkinImageUrls.length} foto{checkinImageUrls.length > 1 ? 's' : ''} ({lastCheckin.checkin_fotos.map(f => f.tipo).join(', ')})
+            </div>
+          )}
         </div>
       )}
 
