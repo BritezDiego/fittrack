@@ -69,10 +69,7 @@ export function CheckinPage() {
 
   const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    if (fotos.length + files.length > 5) {
-      setError('Máximo 5 fotos permitidas.')
-      return
-    }
+    // TODO: restaurar límite de 5 fotos post-testing
     const newFotos = files.map((file) => ({
       file,
       tipo: pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo,
@@ -286,7 +283,7 @@ export function CheckinPage() {
         <div className="card">
           <div className="flex items-center justify-between mb-3">
             <p className="text-xs font-medium" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
-              FOTOS ({fotos.length}/5)
+              FOTOS ({fotos.length})
             </p>
           </div>
 
@@ -357,7 +354,7 @@ export function CheckinPage() {
                 </button>
               </div>
             ))}
-            {fotos.length < 5 && (
+            {(
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
