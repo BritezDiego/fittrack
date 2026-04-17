@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
-import { MES_LABELS } from '../types'
+import { MES_LABELS, getTipoLabel } from '../types'
 import type { CheckinFoto, CheckinWithFotos } from '../types'
 import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
 
@@ -148,7 +148,7 @@ export function FotosPage() {
                   <img src={f.url} alt={f.tipo} className="w-full h-full object-cover" />
                   <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px]"
                        style={{ background: 'rgba(0,0,0,0.7)', color: '#7BF0A0', fontFamily: 'Syne' }}>
-                    {f.tipo}
+                    {getTipoLabel(f.tipo)}
                   </div>
 
                   {/* Confirmar borrado de foto individual */}

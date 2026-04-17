@@ -1,12 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
-import { OBJETIVO_LABELS, NIVEL_LABELS, MES_LABELS } from '../types'
-import { Bot, Dumbbell, Salad, Loader2, Copy, Check } from 'lucide-react'
+import { OBJETIVO_LABELS, NIVEL_LABELS, MES_LABELS, getTipoLabel } from '../types'
+import { Bot, Dumbbell, Salad, Loader2, Copy, Check, AlertTriangle } from 'lucide-react'
 
 type Objetivo = 'perdida_grasa' | 'ganancia_muscular' | 'recomposicion' | 'mantenimiento'
 type Nivel = 'principiante' | 'intermedio' | 'avanzado'
+
+const SS_RUTINA = 'coach_result_rutina'
+const SS_ALIMENTACION = 'coach_result_alimentacion'
 
 export function CoachPage() {
   const { user } = useAuth()
@@ -14,26 +17,103 @@ export function CoachPage() {
   const { checkins } = useCheckins(user?.id)
 
   const lastCheckin = checkins[checkins.length - 1]
+  const prevCheckin = checkins.length >= 2 ? checkins[checkins.length - 2] : null
 
-  const [objetivo, setObjetivo] = useState<Objetivo>(
-    (profile?.objetivo as Objetivo) ?? 'perdida_grasa'
-  )
-  const [nivel, setNivel] = useState<Nivel>(
-    (profile?.nivel as Nivel) ?? 'principiante'
-  )
+  // Defaults first — synced from profile via useEffect
+  const [objetivo, setObjetivo] = useState<Objetivo>('perdida_grasa')
+  const [nivel, setNivel] = useState<Nivel>('principiante')
   const [dias, setDias] = useState(3)
   const [restricciones, setRestricciones] = useState('')
   const [instrucciones, setInstrucciones] = useState('')
 
-  const [loading, setLoading] = useState(false)
-  const [resultRutina, setResultRutina] = useState<string | null>(null)
-  const [resultAlimentacion, setResultAlimentacion] = useState<string | null>(null)
+  useEffect(() => {
+    if (profile?.objetivo) setObjetivo(profile.objetivo as Objetivo)
+    if (profile?.nivel) setNivel(profile.nivel as Nivel)
+  }, [profile?.objetivo, profile?.nivel])
+
+  // Per-card loading states
+  const [loadingRutina, setLoadingRutina] = useState(false)
+  const [loadingAlimentacion, setLoadingAlimentacion] = useState(false)
+  const loading = loadingRutina || loadingAlimentacion
+
+  // Persist results across navigation via sessionStorage
+  const [resultRutina, setResultRutinaState] = useState<string | null>(() =>
+    sessionStorage.getItem(SS_RUTINA)
+  )
+  const [resultAlimentacion, setResultAlimentacionState] = useState<string | null>(() =>
+    sessionStorage.getItem(SS_ALIMENTACION)
+  )
+
+  const setResultRutina = (v: string | null) => {
+    setResultRutinaState(v)
+    if (v) sessionStorage.setItem(SS_RUTINA, v)
+    else sessionStorage.removeItem(SS_RUTINA)
+  }
+
+  const setResultAlimentacion = (v: string | null) => {
+    setResultAlimentacionState(v)
+    if (v) sessionStorage.setItem(SS_ALIMENTACION, v)
+    else sessionStorage.removeItem(SS_ALIMENTACION)
+  }
+
   const [error, setError] = useState<string | null>(null)
   const [copiedRutina, setCopiedRutina] = useState(false)
   const [copiedAlimentacion, setCopiedAlimentacion] = useState(false)
 
-  const checkinImageUrls = lastCheckin?.checkin_fotos?.map(f => f.url) ?? []
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const hasResults = !!(resultRutina || resultAlimentacion)
+
+  // Fotos: hasta 5 del check-in anterior + 5 del último
+  const prevCheckinFotos = prevCheckin?.checkin_fotos?.slice(0, 5) ?? []
+  const lastCheckinFotos = lastCheckin?.checkin_fotos?.slice(0, 5) ?? []
+  const checkinImageUrls = [
+    ...prevCheckinFotos.map(f => f.url),
+    ...lastCheckinFotos.map(f => f.url),
+  ]
   const hasImages = checkinImageUrls.length > 0
+
+  // Construye el array de URLs y el contexto de imágenes con matching inteligente por tipo
+  const buildImageData = () => {
+    if (!hasImages) return { urls: [] as string[], imageContext: '' }
+
+    // Indexar por tipo
+    const prevByTipo = new Map(prevCheckinFotos.map(f => [f.tipo, f]))
+    const lastByTipo = new Map(lastCheckinFotos.map(f => [f.tipo, f]))
+    const allTipos = [...new Set([...prevByTipo.keys(), ...lastByTipo.keys()])]
+
+    const urls: string[] = []
+    const lines: string[] = []
+    let idx = 1
+
+    const prevLabel = prevCheckin ? `${MES_LABELS[prevCheckin.mes]} ${prevCheckin.anio}` : ''
+    const lastLabel = `${MES_LABELS[lastCheckin!.mes]} ${lastCheckin!.anio}`
+
+    for (const tipo of allTipos) {
+      const prev = prevByTipo.get(tipo)
+      const last = lastByTipo.get(tipo)
+      const label = getTipoLabel(tipo)
+
+      if (prev && last) {
+        // Ambos meses tienen esta foto → par de comparación
+        urls.push(prev.url, last.url)
+        lines.push(`Imágenes ${idx} y ${idx + 1}: "${label}" — ${prevLabel} vs ${lastLabel} (COMPARAR)`)
+        idx += 2
+      } else if (last && !prev) {
+        // Solo en el último mes → primera vez, sin referencia
+        urls.push(last.url)
+        lines.push(`Imagen ${idx}: "${label}" — ${lastLabel} (primera vez registrada, sin foto anterior para comparar)`)
+        idx += 1
+      } else if (prev && !last) {
+        // Solo en el mes anterior → no hay foto reciente
+        urls.push(prev.url)
+        lines.push(`Imagen ${idx}: "${label}" — ${prevLabel} (no hay foto reciente de este ángulo)`)
+        idx += 1
+      }
+    }
+
+    const imageContext = `\nFOTOS ADJUNTAS (${urls.length} en total):\n${lines.join('\n')}\n`
+    return { urls, imageContext }
+  }
 
   const buildContext = () => {
     const userData = [
@@ -59,19 +139,24 @@ export function CoachPage() {
         ].filter(Boolean).join('\n')
       : 'Sin check-in registrado aún.'
 
-    const imageContext = hasImages
-      ? `\nFOTOS DEL ÚLTIMO CHECK-IN: Se adjuntan ${checkinImageUrls.length} foto(s). Analiza visualmente la composición corporal para personalizar el plan.\n`
-      : ''
+    const { urls: imageUrls, imageContext } = buildImageData()
 
     const instruccionesContext = instrucciones.trim()
       ? `\nINSTRUCCIONES ESPECÍFICAS (prioridad alta):\n${instrucciones.trim()}\n`
       : ''
 
-    return { userData, medidasStr, imageContext, instruccionesContext }
+    return { userData, medidasStr, imageContext, imageUrls, instruccionesContext }
   }
 
   const buildRutinaPrompt = () => {
     const { userData, medidasStr, imageContext, instruccionesContext } = buildContext()
+    // imageUrls se obtiene por separado en generate()
+
+    // Detección de duplicados solo en este prompt (se ejecuta una sola vez)
+    const duplicateInstruction = prevCheckinFotos.length > 0 && lastCheckinFotos.length > 0
+      ? `\nANTES DE ANALIZAR: Compará minuciosamente las fotos de ambos check-ins para detectar si alguna imagen fue reutilizada entre meses. La clienta puede estar en ropa interior o ropa deportiva ajustada — examiná con detalle: posición corporal exacta, ángulo, iluminación, sombras, marcas en la piel, ropa, accesorios, fondo. Si encontrás fotos idénticas o muy similares entre meses, indicalo claramente al inicio de tu respuesta antes del plan. Si todas son distintas, confirmalo también.\n`
+      : ''
+
     return `Eres un coach fitness experto. Genera una rutina semanal detallada y personalizada.
 
 DATOS DEL USUARIO:
@@ -79,7 +164,7 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-${imageContext}${instruccionesContext}
+${imageContext}${duplicateInstruction}${instruccionesContext}
 Genera una RUTINA SEMANAL con:
 - Distribución clara de días (ej: Lunes - Pecho/Tríceps, etc.)
 - Para cada ejercicio: series, repeticiones, descanso y notas de forma
@@ -92,6 +177,7 @@ Formato: usa markdown con headers (##), listas y tablas donde sea útil. Sé esp
 
   const buildAlimentacionPrompt = () => {
     const { userData, medidasStr, imageContext, instruccionesContext } = buildContext()
+    // imageUrls se obtiene por separado en generate()
     return `Eres un nutricionista deportivo experto. Genera un plan de alimentación detallado y personalizado.
 
 DATOS DEL USUARIO:
@@ -113,12 +199,13 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 
   const streamResponse = async (
     prompt: string,
+    imageUrls: string[],
     onChunk: (text: string) => void
   ) => {
     const response = await fetch('/api/coach', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, imageUrls: checkinImageUrls }),
+      body: JSON.stringify({ prompt, imageUrls }),
     })
 
     if (!response.ok) {
@@ -159,24 +246,39 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     setError(null)
     setResultRutina(null)
     setResultAlimentacion(null)
-    setLoading(true)
+    setLoadingRutina(true)
+    setLoadingAlimentacion(true)
 
-    try {
-      await Promise.all([
-        streamResponse(buildRutinaPrompt(), setResultRutina),
-        streamResponse(buildAlimentacionPrompt(), setResultAlimentacion),
-      ])
-    } catch (err: any) {
-      setError(err.message ?? 'Error al conectar con el Coach IA.')
-    } finally {
-      setLoading(false)
-    }
+    // Scroll to results area as soon as loading starts
+    setTimeout(() => {
+      resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 100)
+
+    const { imageUrls } = buildContext()
+
+    const [rutinaErr, alimentacionErr] = await Promise.all([
+      streamResponse(buildRutinaPrompt(), imageUrls, setResultRutina)
+        .then(() => null as null)
+        .catch((e: any) => e)
+        .finally(() => setLoadingRutina(false)),
+      streamResponse(buildAlimentacionPrompt(), imageUrls, setResultAlimentacion)
+        .then(() => null as null)
+        .catch((e: any) => e)
+        .finally(() => setLoadingAlimentacion(false)),
+    ])
+
+    const err = rutinaErr ?? alimentacionErr
+    if (err) setError((err as any).message ?? 'Error al conectar con el Coach IA.')
   }
 
-  const copy = (text: string, setCopied: (v: boolean) => void) => {
-    navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const copy = async (text: string, setCopied: (v: boolean) => void) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // clipboard no disponible
+    }
   }
 
   return (
@@ -290,6 +392,15 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
         </div>
       </div>
 
+      {/* Aviso: sin check-in */}
+      {!lastCheckin && (
+        <div className="rounded-xl px-4 py-3 mb-5 text-xs flex items-start gap-2"
+             style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)', color: '#fbbf24' }}>
+          <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+          <span>Sin check-in registrado — el plan se generará con datos básicos del perfil, sin medidas ni fotos.</span>
+        </div>
+      )}
+
       {/* Context preview */}
       {lastCheckin && (
         <div className="rounded-xl px-4 py-3 mb-5 text-xs flex flex-col gap-1"
@@ -299,9 +410,22 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
             {MES_LABELS[lastCheckin.mes]} {lastCheckin.anio} — {lastCheckin.peso ?? '?'}kg
           </div>
           {hasImages && (
-            <div>
-              <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos para análisis visual: </span>
-              {checkinImageUrls.length} foto{checkinImageUrls.length > 1 ? 's' : ''} ({lastCheckin.checkin_fotos.map(f => f.tipo).join(', ')})
+            <div className="flex flex-col gap-0.5">
+              {prevCheckinFotos.length > 0 && (
+                <div>
+                  <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos {MES_LABELS[prevCheckin!.mes]} {prevCheckin!.anio}: </span>
+                  {prevCheckinFotos.length} foto{prevCheckinFotos.length > 1 ? 's' : ''} ({prevCheckinFotos.map(f => getTipoLabel(f.tipo)).join(', ')})
+                </div>
+              )}
+              <div>
+                <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos {MES_LABELS[lastCheckin.mes]} {lastCheckin.anio}: </span>
+                {lastCheckinFotos.length} foto{lastCheckinFotos.length > 1 ? 's' : ''} ({lastCheckinFotos.map(f => getTipoLabel(f.tipo)).join(', ')})
+              </div>
+              {prevCheckinFotos.length > 0 && lastCheckinFotos.length > 0 && (
+                <div style={{ color: 'var(--color-muted)', fontStyle: 'italic' }}>
+                  IA comparará ambos check-ins para detectar fotos duplicadas
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -310,7 +434,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
       <button className="btn-primary" onClick={generate} disabled={loading}>
         {loading
           ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Generando plan completo…</span>
-          : 'Generar plan completo'}
+          : hasResults ? 'Regenerar plan completo' : 'Generar plan completo'}
       </button>
 
       {error && (
@@ -320,25 +444,28 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
         </div>
       )}
 
+      {/* Anchor para scroll automático */}
+      <div ref={resultsRef} />
+
       {/* Rutina */}
-      {(resultRutina || (loading && !resultRutina)) && (
+      {(resultRutina || loadingRutina) && (
         <ResultCard
           title="Rutina semanal"
           icon={<Dumbbell size={14} color="#7BF0A0" />}
           content={resultRutina}
-          loading={loading && !resultRutina}
+          loading={loadingRutina && !resultRutina}
           copied={copiedRutina}
           onCopy={() => resultRutina && copy(resultRutina, setCopiedRutina)}
         />
       )}
 
       {/* Alimentación */}
-      {(resultAlimentacion || (loading && !resultAlimentacion)) && (
+      {(resultAlimentacion || loadingAlimentacion) && (
         <ResultCard
           title="Plan alimentario"
           icon={<Salad size={14} color="#7BF0A0" />}
           content={resultAlimentacion}
-          loading={loading && !resultAlimentacion}
+          loading={loadingAlimentacion && !resultAlimentacion}
           copied={copiedAlimentacion}
           onCopy={() => resultAlimentacion && copy(resultAlimentacion, setCopiedAlimentacion)}
         />
@@ -380,7 +507,7 @@ function ResultCard({
         )}
       </div>
 
-      {loading && !content ? (
+      {loading ? (
         <div className="flex items-center gap-2 py-4" style={{ color: 'var(--color-muted)' }}>
           <Loader2 size={14} className="animate-spin" />
           <span className="text-sm">Generando…</span>
@@ -394,33 +521,134 @@ function ResultCard({
   )
 }
 
-function MarkdownRenderer({ content }: { content: string }) {
-  const lines = content.split('\n')
+// Renderiza texto con soporte para **negrita** inline
+function InlineText({ text }: { text: string }) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/)
+  if (parts.length === 1) return <>{text}</>
   return (
     <>
-      {lines.map((line, i) => {
-        if (line.startsWith('## ')) {
-          return <h2 key={i} className="text-base font-bold mt-4 mb-2" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>{line.slice(3)}</h2>
+      {parts.map((part, i) =>
+        part.startsWith('**') && part.endsWith('**')
+          ? <strong key={i}>{part.slice(2, -2)}</strong>
+          : <span key={i}>{part}</span>
+      )}
+    </>
+  )
+}
+
+function TableBlock({ rows }: { rows: string[][] }) {
+  if (rows.length === 0) return null
+  const [header, ...body] = rows
+  return (
+    <div className="overflow-x-auto my-3">
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr>
+            {header.map((cell, i) => (
+              <th key={i} className="px-3 py-2 text-left font-semibold"
+                style={{ background: 'rgba(123,240,160,0.1)', borderBottom: '1px solid rgba(123,240,160,0.3)', color: '#7BF0A0', fontFamily: 'Syne' }}>
+                {cell}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, ri) => (
+            <tr key={ri}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="px-3 py-2"
+                  style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                  <InlineText text={cell} />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+type Block =
+  | { type: 'h2'; text: string }
+  | { type: 'h3'; text: string }
+  | { type: 'bullet'; text: string }
+  | { type: 'numbered'; text: string }
+  | { type: 'table'; rows: string[][] }
+  | { type: 'empty' }
+  | { type: 'text'; text: string }
+
+function parseBlocks(content: string): Block[] {
+  const lines = content.split('\n')
+  const blocks: Block[] = []
+  let i = 0
+
+  while (i < lines.length) {
+    const line = lines[i]
+    if (line.startsWith('## ')) {
+      blocks.push({ type: 'h2', text: line.slice(3) })
+      i++
+    } else if (line.startsWith('#### ')) {
+      blocks.push({ type: 'h3', text: line.slice(5) })
+      i++
+    } else if (line.startsWith('### ')) {
+      blocks.push({ type: 'h3', text: line.slice(4) })
+      i++
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      blocks.push({ type: 'bullet', text: line.slice(2) })
+      i++
+    } else if (line.match(/^\d+\./)) {
+      blocks.push({ type: 'numbered', text: line })
+      i++
+    } else if (line.startsWith('|')) {
+      const tableLines: string[] = []
+      while (i < lines.length && lines[i].startsWith('|')) {
+        tableLines.push(lines[i])
+        i++
+      }
+      // Filtrar filas separadoras (ej: | --- | :---: |)
+      const rows = tableLines
+        .filter(l => !l.split('|').slice(1, -1).every(cell => /^[\s\-:]+$/.test(cell)))
+        .map(l => l.split('|').slice(1, -1).map(cell => cell.trim()))
+      if (rows.length > 0) blocks.push({ type: 'table', rows })
+    } else if (line === '') {
+      blocks.push({ type: 'empty' })
+      i++
+    } else {
+      blocks.push({ type: 'text', text: line })
+      i++
+    }
+  }
+
+  return blocks
+}
+
+function MarkdownRenderer({ content }: { content: string }) {
+  const blocks = parseBlocks(content)
+  return (
+    <>
+      {blocks.map((block, i) => {
+        switch (block.type) {
+          case 'h2':
+            return <h2 key={i} className="text-base font-bold mt-4 mb-2" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>{block.text}</h2>
+          case 'h3':
+            return <h3 key={i} className="text-sm font-bold mt-3 mb-1" style={{ fontFamily: 'Syne', color: '#f0f0f0' }}>{block.text}</h3>
+          case 'bullet':
+            return (
+              <div key={i} className="flex gap-2 my-0.5">
+                <span style={{ color: '#7BF0A0' }}>•</span>
+                <span><InlineText text={block.text} /></span>
+              </div>
+            )
+          case 'numbered':
+            return <p key={i} className="my-0.5 pl-1"><InlineText text={block.text} /></p>
+          case 'table':
+            return <TableBlock key={i} rows={block.rows} />
+          case 'empty':
+            return <div key={i} className="h-2" />
+          case 'text':
+            return <p key={i} className="my-0.5"><InlineText text={block.text} /></p>
         }
-        if (line.startsWith('### ')) {
-          return <h3 key={i} className="text-sm font-bold mt-3 mb-1" style={{ fontFamily: 'Syne', color: '#f0f0f0' }}>{line.slice(4)}</h3>
-        }
-        if (line.startsWith('**') && line.endsWith('**')) {
-          return <p key={i} className="font-semibold my-1">{line.slice(2, -2)}</p>
-        }
-        if (line.startsWith('- ') || line.startsWith('* ')) {
-          return (
-            <div key={i} className="flex gap-2 my-0.5">
-              <span style={{ color: '#7BF0A0' }}>•</span>
-              <span>{line.slice(2)}</span>
-            </div>
-          )
-        }
-        if (line.match(/^\d+\./)) {
-          return <p key={i} className="my-0.5 pl-1">{line}</p>
-        }
-        if (line === '') return <div key={i} className="h-2" />
-        return <p key={i} className="my-0.5">{line}</p>
       })}
     </>
   )

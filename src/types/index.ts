@@ -29,8 +29,15 @@ export interface CheckinFoto {
   id: string
   checkin_id: string
   url: string
-  tipo: 'frente' | 'perfil' | 'espalda' | 'extra'
+  tipo: string   // 'frente' | 'perfil' | 'espalda' | 'extra:Glúteos' | 'extra:Brazos' | …
   created_at: string
+}
+
+// Devuelve el label legible de un tipo de foto
+export function getTipoLabel(tipo: string): string {
+  if (tipo.startsWith('extra:')) return tipo.slice(6)
+  const map: Record<string, string> = { frente: 'Frente', perfil: 'Perfil', espalda: 'Espalda', extra: 'Extra' }
+  return map[tipo] ?? tipo
 }
 
 export interface CheckinWithFotos extends Checkin {

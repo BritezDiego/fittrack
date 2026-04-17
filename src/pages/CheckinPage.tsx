@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
-import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS } from '../types'
+import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS, getTipoLabel } from '../types'
 import { Camera, X, Check, RefreshCw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
@@ -11,6 +11,11 @@ const FOTO_TIPOS: CheckinFoto['tipo'][] = ['frente', 'perfil', 'espalda', 'extra
 const FOTO_LABELS: Record<CheckinFoto['tipo'], string> = {
   frente: 'Frente', perfil: 'Perfil', espalda: 'Espalda', extra: 'Extra',
 }
+
+const EXTRA_OPCIONES = [
+  'Glúteos', 'Brazos', 'Isquiotibiales', 'Cuádriceps',
+  'Pantorrillas', 'Hombros', 'Pecho', 'Abdomen', 'Espalda baja', 'Otro',
+]
 
 const now = new Date()
 
@@ -28,12 +33,13 @@ export function CheckinPage() {
   const [edad, setEdad] = useState('')
   const [altura, setAltura] = useState('')
   const [notas, setNotas] = useState('')
-  const [fotos, setFotos] = useState<{ file: File; tipo: CheckinFoto['tipo']; preview: string }[]>([])
+  const [fotos, setFotos] = useState<{ file: File; tipo: string; preview: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingTipo, setPendingTipo] = useState<CheckinFoto['tipo']>('frente')
+  const [extraLabel, setExtraLabel] = useState(EXTRA_OPCIONES[0])
   const [editingId, setEditingId] = useState<string | null>(null)
 
   // Detecta si el mes/año actual ya tiene un check-in
@@ -69,7 +75,7 @@ export function CheckinPage() {
     }
     const newFotos = files.map((file) => ({
       file,
-      tipo: pendingTipo,
+      tipo: pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo,
       preview: URL.createObjectURL(file),
     }))
     setFotos(prev => [...prev, ...newFotos])
@@ -305,6 +311,32 @@ export function CheckinPage() {
             ))}
           </div>
 
+          {/* Sub-selector Extra */}
+          {pendingTipo === 'extra' && (
+            <div className="mb-3 flex flex-col gap-1.5">
+              <p className="text-xs" style={{ color: 'var(--color-muted)' }}>¿Qué zona es?</p>
+              <div className="flex flex-wrap gap-1.5">
+                {EXTRA_OPCIONES.map(op => (
+                  <button
+                    key={op}
+                    type="button"
+                    onClick={() => setExtraLabel(op)}
+                    className="px-2.5 py-1 rounded-lg text-xs transition-all"
+                    style={{
+                      fontFamily: 'DM Sans',
+                      background: extraLabel === op ? 'rgba(123,240,160,0.15)' : 'var(--color-surface-2)',
+                      border: '1px solid',
+                      borderColor: extraLabel === op ? '#7BF0A0' : 'var(--color-border)',
+                      color: extraLabel === op ? '#7BF0A0' : 'var(--color-muted)',
+                    }}
+                  >
+                    {op}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Preview grid */}
           <div className="grid grid-cols-3 gap-2 mb-3">
             {fotos.map((f, i) => (
@@ -313,7 +345,7 @@ export function CheckinPage() {
                 <img src={f.preview} alt={f.tipo} className="w-full h-full object-cover" />
                 <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px]"
                      style={{ background: 'rgba(0,0,0,0.7)', color: '#7BF0A0', fontFamily: 'Syne' }}>
-                  {FOTO_LABELS[f.tipo]}
+                  {getTipoLabel(f.tipo)}
                 </div>
                 <button
                   type="button"
