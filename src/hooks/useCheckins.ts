@@ -79,9 +79,10 @@ export function useCheckins(userId: string | undefined) {
     if (checkinError) return { error: checkinError }
 
     const uploadedFotos: Omit<CheckinFoto, 'id' | 'created_at'>[] = []
-    for (const { file, tipo } of files.slice(0, 5)) {
+    // TODO: restaurar slice(0, 5) post-testing
+    for (const [i, { file, tipo }] of files.entries()) {
       const ext = file.name.split('.').pop()
-      const path = `${userId}/${savedCheckin.id}/${tipo}_${Date.now()}.${ext}`
+      const path = `${userId}/${savedCheckin.id}/${tipo}_${Date.now()}_${i}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('checkin-fotos')
         .upload(path, file, { upsert: true })
