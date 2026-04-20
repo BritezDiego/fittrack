@@ -1,13 +1,12 @@
-import Anthropic from '@anthropic-ai/sdk'
-
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), { status: 405 })
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key no configurada' }), { status: 500 })
+  const apiUser = process.env.SIGHTENGINE_USER
+  const apiSecret = process.env.SIGHTENGINE_SECRET
+  if (!apiUser || !apiSecret) {
+    return new Response(JSON.stringify({ error: 'Sightengine no configurado' }), { status: 500 })
   }
 
   let body: { image: string; mediaType: string }
@@ -17,41 +16,40 @@ export default async function handler(req: Request): Promise<Response> {
     return new Response(JSON.stringify({ error: 'Body inválido' }), { status: 400 })
   }
 
-  const client = new Anthropic({ apiKey })
-
   try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 10,
-      messages: [{
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: body.mediaType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp',
-              data: body.image,
-            },
-          },
-          {
-            type: 'text',
-            text: 'Eres un sistema de moderación de contenido para una app de fitness. Analizá esta imagen y determiná si contiene desnudez explícita (genitales o zona púbica expuesta). Una foto de torso sin ropa, en corpiño, o ropa deportiva ajustada NO es desnudez explícita. Respondé ÚNICAMENTE con "SI" o "NO".',
-          },
-        ],
-      }],
+    const buffer = Buffer.from(body.image, 'base64')
+    const blob = new Blob([buffer], { type: body.mediaType || 'image/jpeg' })
+
+    const formData = new FormData()
+    formData.append('media', blob, 'image.jpg')
+    formData.append('models', 'nudity')
+    formData.append('api_user', apiUser)
+    formData.append('api_secret', apiSecret)
+
+    const res = await fetch('https://api.sightengine.com/1.0/check.json', {
+      method: 'POST',
+      body: formData,
     })
 
-    const text = ((response.content[0] as any).text ?? '').trim().toUpperCase()
-    const nude = text.startsWith('SI') || text.startsWith('SÍ')
+    const data = await res.json()
+
+    if (data.status !== 'success') {
+      // Si Sightengine falla, permitimos la foto (no bloqueamos por error técnico)
+      return new Response(JSON.stringify({ nude: false }), { status: 200 })
+    }
+
+    const nudity = data.nudity ?? {}
+    const nude =
+      (nudity.sexual_activity ?? 0) > 0.5 ||
+      (nudity.sexual_display ?? 0) > 0.5 ||
+      (nudity.raw ?? 0) > 0.5
 
     return new Response(JSON.stringify({ nude }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })
   } catch {
-    // Si Claude rechaza analizar la imagen, la bloqueamos por precaución
-    return new Response(JSON.stringify({ nude: true }), { status: 200 })
+    return new Response(JSON.stringify({ nude: false }), { status: 200 })
   }
 }
 
