@@ -4,7 +4,7 @@ import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS, getTipoLabel } from '../types'
-import { Camera, X, Check, RefreshCw } from 'lucide-react'
+import { Camera, X, Check, RefreshCw, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 const FOTO_TIPOS: CheckinFoto['tipo'][] = ['frente', 'perfil', 'espalda', 'extra']
@@ -37,6 +37,7 @@ export function CheckinPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [moderating, setModerating] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingTipo, setPendingTipo] = useState<CheckinFoto['tipo']>('frente')
   const [extraLabel, setExtraLabel] = useState(EXTRA_OPCIONES[0])
@@ -67,16 +68,58 @@ export function CheckinPage() {
     }
   }
 
-  const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+
+  const handleFotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
-    // TODO: restaurar límite de 5 fotos post-testing
-    const newFotos = files.map((file) => ({
-      file,
-      tipo: pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo,
-      preview: URL.createObjectURL(file),
-    }))
-    setFotos(prev => [...prev, ...newFotos])
     e.target.value = ''
+    if (!files.length) return
+
+    setModerating(true)
+    setError(null)
+
+    const aprobadas: typeof files = []
+    const bloqueadas: string[] = []
+
+    await Promise.all(files.map(async (file) => {
+      try {
+        const image = await toBase64(file)
+        const mediaType = file.type || 'image/jpeg'
+        const res = await fetch('/api/moderation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image, mediaType }),
+        })
+        const { nude } = await res.json()
+        if (nude) {
+          bloqueadas.push(file.name)
+        } else {
+          aprobadas.push(file)
+        }
+      } catch {
+        // Si falla la verificación, permitimos la foto
+        aprobadas.push(file)
+      }
+    }))
+
+    setModerating(false)
+
+    if (bloqueadas.length) {
+      setError(`Foto(s) no permitidas por contener desnudez explícita: ${bloqueadas.join(', ')}`)
+    }
+
+    if (aprobadas.length) {
+      const tipo = pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo
+      setFotos(prev => [
+        ...prev,
+        ...aprobadas.map(file => ({ file, tipo, preview: URL.createObjectURL(file) })),
+      ])
+    }
   }
 
   const removeFoto = (idx: number) => {
@@ -357,21 +400,23 @@ export function CheckinPage() {
                 </button>
               </div>
             ))}
-            {(
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
-                style={{
-                  background: 'var(--color-surface-2)',
-                  border: '1px dashed var(--color-border)',
-                  color: 'var(--color-muted)',
-                }}
-              >
-                <Camera size={20} />
-                <span className="text-xs" style={{ fontFamily: 'Syne' }}>Agregar</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => !moderating && fileInputRef.current?.click()}
+              disabled={moderating}
+              className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
+              style={{
+                background: 'var(--color-surface-2)',
+                border: '1px dashed var(--color-border)',
+                color: 'var(--color-muted)',
+                opacity: moderating ? 0.6 : 1,
+              }}
+            >
+              {moderating
+                ? <><Loader2 size={18} className="animate-spin" /><span className="text-xs" style={{ fontFamily: 'Syne' }}>Verificando…</span></>
+                : <><Camera size={20} /><span className="text-xs" style={{ fontFamily: 'Syne' }}>Agregar</span></>
+              }
+            </button>
           </div>
 
           <input
