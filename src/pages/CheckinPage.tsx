@@ -4,7 +4,7 @@ import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS, getTipoLabel } from '../types'
-import { Camera, X, Check, RefreshCw, ShieldAlert } from 'lucide-react'
+import { Camera, X, Check, RefreshCw, ShieldAlert, Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 const FOTO_TIPOS: CheckinFoto['tipo'][] = ['frente', 'perfil', 'espalda', 'extra']
@@ -38,6 +38,7 @@ export function CheckinPage() {
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showNudityModal, setShowNudityModal] = useState(false)
+  const [moderating, setModerating] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingTipo, setPendingTipo] = useState<CheckinFoto['tipo']>('frente')
   const [extraLabel, setExtraLabel] = useState(EXTRA_OPCIONES[0])
@@ -68,15 +69,53 @@ export function CheckinPage() {
     }
   }
 
-  const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve((reader.result as string).split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+
+  const handleFotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
     if (!files.length) return
-    const tipo = pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo
-    setFotos(prev => [
-      ...prev,
-      ...files.map(file => ({ file, tipo, preview: URL.createObjectURL(file) })),
-    ])
+
+    setModerating(true)
+    setError(null)
+
+    const aprobadas: File[] = []
+    const bloqueadas: string[] = []
+
+    await Promise.all(files.map(async (file) => {
+      try {
+        const image = await toBase64(file)
+        const res = await fetch('/api/moderation', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image, mediaType: file.type || 'image/jpeg' }),
+        })
+        const { nude } = await res.json()
+        if (nude) bloqueadas.push(file.name)
+        else aprobadas.push(file)
+      } catch {
+        aprobadas.push(file) // si falla la verificación, se permite
+      }
+    }))
+
+    setModerating(false)
+
+    if (bloqueadas.length) {
+      setError(`Foto(s) bloqueadas por contener desnudez explícita: ${bloqueadas.join(', ')}`)
+    }
+
+    if (aprobadas.length) {
+      const tipo = pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo
+      setFotos(prev => [
+        ...prev,
+        ...aprobadas.map(file => ({ file, tipo, preview: URL.createObjectURL(file) })),
+      ])
+    }
   }
 
   const handleAgregarClick = () => {
@@ -364,16 +403,20 @@ export function CheckinPage() {
             ))}
             <button
               type="button"
-              onClick={handleAgregarClick}
+              onClick={() => !moderating && handleAgregarClick()}
+              disabled={moderating}
               className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
               style={{
                 background: 'var(--color-surface-2)',
                 border: '1px dashed var(--color-border)',
                 color: 'var(--color-muted)',
+                opacity: moderating ? 0.6 : 1,
               }}
             >
-              <Camera size={20} />
-              <span className="text-xs" style={{ fontFamily: 'Syne' }}>Agregar</span>
+              {moderating
+                ? <><Loader2 size={18} className="animate-spin" /><span className="text-xs" style={{ fontFamily: 'Syne' }}>Verificando…</span></>
+                : <><Camera size={20} /><span className="text-xs" style={{ fontFamily: 'Syne' }}>Agregar</span></>
+              }
             </button>
           </div>
 
@@ -415,12 +458,15 @@ export function CheckinPage() {
             <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
               ¿La foto que vas a subir contiene desnudez explícita (genitales o zona púbica expuesta)?
             </p>
+            <p className="text-xs" style={{ color: 'var(--color-muted)', fontStyle: 'italic' }}>
+              Todas las fotos son analizadas automáticamente. Si se detecta contenido explícito será bloqueada.
+            </p>
             <div className="flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setShowNudityModal(false)
-                  setError('No se permite subir fotos con desnudez explícita.')
+                  fileInputRef.current?.click()
                 }}
                 className="w-full py-3 rounded-xl text-sm font-medium"
                 style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontFamily: 'Syne' }}
