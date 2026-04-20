@@ -79,14 +79,17 @@ export function useCheckins(userId: string | undefined) {
     if (checkinError) return { error: checkinError }
 
     const uploadedFotos: Omit<CheckinFoto, 'id' | 'created_at'>[] = []
-    // TODO: restaurar slice(0, 5) post-testing
+    const uploadErrors: string[] = []
+
     for (const [i, { file, tipo }] of files.entries()) {
       const ext = file.name.split('.').pop()
       const path = `${userId}/${savedCheckin.id}/${tipo}_${Date.now()}_${i}.${ext}`
       const { error: uploadError } = await supabase.storage
         .from('checkin-fotos')
         .upload(path, file, { upsert: true })
-      if (!uploadError) {
+      if (uploadError) {
+        uploadErrors.push(`"${file.name}": ${uploadError.message}`)
+      } else {
         const { data: { publicUrl } } = supabase.storage
           .from('checkin-fotos')
           .getPublicUrl(path)
@@ -100,7 +103,7 @@ export function useCheckins(userId: string | undefined) {
     }
 
     await fetchCheckins()
-    return { data: savedCheckin, error: null }
+    return { data: savedCheckin, error: null, uploadErrors }
   }
 
   // Elimina el check-in completo: fotos de storage, registros DB y medidas

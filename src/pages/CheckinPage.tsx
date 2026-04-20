@@ -104,7 +104,7 @@ export function CheckinPage() {
       ),
     } as any
 
-    const [{ error }] = await Promise.all([
+    const [checkinResult] = await Promise.all([
       saveCheckin(checkinData, fotos.map(f => ({ file: f.file, tipo: f.tipo }))),
       updateProfile({
         ...(edadValue ? { edad: parseInt(edadValue) } : {}),
@@ -113,8 +113,11 @@ export function CheckinPage() {
     ])
 
     setSaving(false)
-    if (error) {
+    if (checkinResult?.error) {
       setError('Error guardando el check-in. Intentá de nuevo.')
+    } else if (checkinResult?.uploadErrors?.length) {
+      setError(`Check-in guardado, pero ${checkinResult.uploadErrors.length} foto(s) no pudieron subirse:\n${checkinResult.uploadErrors.join('\n')}`)
+      setTimeout(() => navigate('/dashboard'), 3000)
     } else {
       setSaved(true)
       setTimeout(() => navigate('/dashboard'), 1500)
@@ -382,9 +385,9 @@ export function CheckinPage() {
         </div>
 
         {error && (
-          <div className="rounded-xl px-4 py-3 text-sm"
+          <div className="rounded-xl px-4 py-3 text-sm flex flex-col gap-1"
                style={{ background: 'rgba(239,58,58,0.1)', border: '1px solid rgba(239,58,58,0.3)', color: '#f87171' }}>
-            {error}
+            {error.split('\n').map((line, i) => <span key={i}>{line}</span>)}
           </div>
         )}
 
