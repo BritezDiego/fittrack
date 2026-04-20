@@ -26,6 +26,23 @@ export function useCheckins(userId: string | undefined) {
 
   useEffect(() => { fetchCheckins() }, [userId])
 
+  // Refetch al volver al tab y cada 60 segundos
+  useEffect(() => {
+    if (!userId) return
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') fetchCheckins()
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+
+    const interval = setInterval(fetchCheckins, 60_000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      clearInterval(interval)
+    }
+  }, [userId])
+
   const cleanupOldPhotoSets = async () => {
     if (!userId) return
     const { data } = await supabase

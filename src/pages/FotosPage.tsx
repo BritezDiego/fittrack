@@ -145,7 +145,8 @@ export function FotosPage() {
               {c.checkin_fotos.map(f => (
                 <div key={f.id} className="relative rounded-xl overflow-hidden shrink-0"
                      style={{ width: 100, aspectRatio: '3/4', background: 'var(--color-surface-2)' }}>
-                  <img src={f.url} alt={f.tipo} className="w-full h-full object-cover" />
+                  <img src={f.url} alt={f.tipo} className="w-full h-full object-cover"
+                       onError={e => { (e.currentTarget as HTMLImageElement).closest('.relative')?.remove() }} />
                   <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px]"
                        style={{ background: 'rgba(0,0,0,0.7)', color: '#7BF0A0', fontFamily: 'Syne' }}>
                     {getTipoLabel(f.tipo)}
@@ -241,12 +242,14 @@ export function FotosPage() {
                 <div ref={sliderRef} className="relative select-none overflow-hidden"
                      style={{ aspectRatio: '3/4', cursor: 'ew-resize' }}>
                   <img src={getMainFoto(cB)!} alt="después"
-                       className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                       className="absolute inset-0 w-full h-full object-cover" draggable={false}
+                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                   <div className="absolute inset-0 overflow-hidden" style={{ width: `${sliderPos}%` }}>
                     <img src={getMainFoto(cA)!} alt="antes"
                          className="absolute inset-0 h-full object-cover"
                          style={{ width: `${(100 / sliderPos) * 100}%`, maxWidth: 'none' }}
-                         draggable={false} />
+                         draggable={false}
+                         onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                   </div>
                   <div className="absolute top-0 bottom-0 w-0.5 z-10"
                        style={{ left: `${sliderPos}%`, background: '#7BF0A0', boxShadow: '0 0 10px rgba(123,240,160,0.8)' }} />
