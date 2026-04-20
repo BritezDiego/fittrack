@@ -4,7 +4,7 @@ import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS, getTipoLabel } from '../types'
-import { Camera, X, Check, RefreshCw, Loader2 } from 'lucide-react'
+import { Camera, X, Check, RefreshCw, ShieldAlert } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 const FOTO_TIPOS: CheckinFoto['tipo'][] = ['frente', 'perfil', 'espalda', 'extra']
@@ -37,7 +37,7 @@ export function CheckinPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [moderating, setModerating] = useState(false)
+  const [showNudityModal, setShowNudityModal] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingTipo, setPendingTipo] = useState<CheckinFoto['tipo']>('frente')
   const [extraLabel, setExtraLabel] = useState(EXTRA_OPCIONES[0])
@@ -68,58 +68,20 @@ export function CheckinPage() {
     }
   }
 
-  const toBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve((reader.result as string).split(',')[1])
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-
-  const handleFotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
     e.target.value = ''
     if (!files.length) return
+    const tipo = pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo
+    setFotos(prev => [
+      ...prev,
+      ...files.map(file => ({ file, tipo, preview: URL.createObjectURL(file) })),
+    ])
+  }
 
-    setModerating(true)
+  const handleAgregarClick = () => {
     setError(null)
-
-    const aprobadas: typeof files = []
-    const bloqueadas: string[] = []
-
-    await Promise.all(files.map(async (file) => {
-      try {
-        const image = await toBase64(file)
-        const mediaType = file.type || 'image/jpeg'
-        const res = await fetch('/api/moderation', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image, mediaType }),
-        })
-        const { nude } = await res.json()
-        if (nude) {
-          bloqueadas.push(file.name)
-        } else {
-          aprobadas.push(file)
-        }
-      } catch {
-        // Si falla la verificación, permitimos la foto
-        aprobadas.push(file)
-      }
-    }))
-
-    setModerating(false)
-
-    if (bloqueadas.length) {
-      setError(`Foto(s) no permitidas por contener desnudez explícita: ${bloqueadas.join(', ')}`)
-    }
-
-    if (aprobadas.length) {
-      const tipo = pendingTipo === 'extra' ? `extra:${extraLabel}` : pendingTipo
-      setFotos(prev => [
-        ...prev,
-        ...aprobadas.map(file => ({ file, tipo, preview: URL.createObjectURL(file) })),
-      ])
-    }
+    setShowNudityModal(true)
   }
 
   const removeFoto = (idx: number) => {
@@ -402,20 +364,16 @@ export function CheckinPage() {
             ))}
             <button
               type="button"
-              onClick={() => !moderating && fileInputRef.current?.click()}
-              disabled={moderating}
+              onClick={handleAgregarClick}
               className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
               style={{
                 background: 'var(--color-surface-2)',
                 border: '1px dashed var(--color-border)',
                 color: 'var(--color-muted)',
-                opacity: moderating ? 0.6 : 1,
               }}
             >
-              {moderating
-                ? <><Loader2 size={18} className="animate-spin" /><span className="text-xs" style={{ fontFamily: 'Syne' }}>Verificando…</span></>
-                : <><Camera size={20} /><span className="text-xs" style={{ fontFamily: 'Syne' }}>Agregar</span></>
-              }
+              <Camera size={20} />
+              <span className="text-xs" style={{ fontFamily: 'Syne' }}>Agregar</span>
             </button>
           </div>
 
@@ -440,6 +398,50 @@ export function CheckinPage() {
           {saving ? 'Guardando…' : isUpdate ? `Actualizar ${MES_LABELS[mes]} ${anio}` : 'Guardar check-in'}
         </button>
       </form>
+
+      {/* Modal verificación de contenido */}
+      {showNudityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6"
+             style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4"
+               style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                   style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)' }}>
+                <ShieldAlert size={18} color="#fbbf24" />
+              </div>
+              <h3 className="font-bold text-base" style={{ fontFamily: 'Syne' }}>Verificación de contenido</h3>
+            </div>
+            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+              ¿La foto que vas a subir contiene desnudez explícita (genitales o zona púbica expuesta)?
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNudityModal(false)
+                  setError('No se permite subir fotos con desnudez explícita.')
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium"
+                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontFamily: 'Syne' }}
+              >
+                Sí, contiene desnudez explícita
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNudityModal(false)
+                  fileInputRef.current?.click()
+                }}
+                className="w-full py-3 rounded-xl text-sm font-medium"
+                style={{ background: 'rgba(123,240,160,0.12)', border: '1px solid rgba(123,240,160,0.3)', color: '#7BF0A0', fontFamily: 'Syne' }}
+              >
+                No, es una foto apta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -6,6 +6,7 @@ export interface Profile {
   altura: number | null
   objetivo: 'perdida_grasa' | 'ganancia_muscular' | 'recomposicion' | 'mantenimiento' | null
   nivel: 'principiante' | 'intermedio' | 'avanzado' | null
+  legal_accepted_at: string | null
   created_at: string
 }
 
