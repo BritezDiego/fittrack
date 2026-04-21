@@ -1,21 +1,28 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useCheckins } from '../hooks/useCheckins'
 import { useAuth } from '../hooks/useAuth'
+import { useProfile } from '../hooks/useProfile'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid,
 } from 'recharts'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS } from '../types'
 import type { MedidaKey } from '../types'
-import { TrendingUp, TrendingDown, Minus, Trash2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Trash2, UserCircle, X } from 'lucide-react'
 
 export function DashboardPage() {
   const { user } = useAuth()
   const { checkins, loading, deleteCheckin } = useCheckins(user?.id)
+  const { profile } = useProfile(user?.id)
+  const navigate = useNavigate()
   const [activeMedida, setActiveMedida] = useState<MedidaKey>('peso')
   const [compareA, setCompareA] = useState<string>('')
   const [compareB, setCompareB] = useState<string>('')
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
+
+  const profileIncomplete = !profile?.nombre || !profile?.objetivo || !profile?.nivel
 
   const handleDelete = async (id: string) => {
     setDeleting(true)
@@ -26,16 +33,45 @@ export function DashboardPage() {
 
   if (loading) return <LoadingSkeleton />
 
+  const profileBanner = profileIncomplete && !bannerDismissed ? (
+    <div className="flex items-start gap-3 px-4 py-3 rounded-2xl mb-6"
+         style={{ background: 'rgba(123,240,160,0.08)', border: '1px solid rgba(123,240,160,0.25)' }}>
+      <UserCircle size={20} color="#7BF0A0" className="shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold mb-0.5" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>
+          Completá tu perfil
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          Para que el Coach IA pueda darte recomendaciones personalizadas, completá tu nombre, objetivo y nivel en Perfil.
+        </p>
+        <button
+          onClick={() => navigate('/perfil')}
+          className="mt-2 text-xs font-medium px-3 py-1.5 rounded-lg"
+          style={{ background: 'rgba(123,240,160,0.15)', color: '#7BF0A0', border: '1px solid rgba(123,240,160,0.3)', fontFamily: 'Syne' }}
+        >
+          Ir a Perfil →
+        </button>
+      </div>
+      <button onClick={() => setBannerDismissed(true)} className="shrink-0 p-1 rounded-lg"
+              style={{ color: 'var(--color-muted)' }}>
+        <X size={14} />
+      </button>
+    </div>
+  ) : null
+
   if (checkins.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
-        <div className="text-6xl mb-4">📊</div>
-        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Syne' }}>
-          Sin datos aún
-        </h2>
-        <p style={{ color: 'var(--color-muted)' }}>
-          Hacé tu primer check-in para empezar a ver tu progreso.
-        </p>
+      <div className="px-4 pt-8 pb-6">
+        {profileBanner}
+        <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+          <div className="text-6xl mb-4">📊</div>
+          <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Syne' }}>
+            Sin datos aún
+          </h2>
+          <p style={{ color: 'var(--color-muted)' }}>
+            Hacé tu primer check-in para empezar a ver tu progreso.
+          </p>
+        </div>
       </div>
     )
   }
@@ -62,6 +98,7 @@ export function DashboardPage() {
 
   return (
     <div className="px-4 pt-8 pb-6">
+      {profileBanner}
       <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: 'Syne' }}>
         Tu progreso
       </h1>
