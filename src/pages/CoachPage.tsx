@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
-import { OBJETIVO_LABELS, NIVEL_LABELS, MES_LABELS, getTipoLabel } from '../types'
-import { Bot, Dumbbell, Salad, Loader2, Copy, Check, AlertTriangle } from 'lucide-react'
+import { OBJETIVO_LABELS, NIVEL_LABELS, MES_LABELS, getTipoLabel, parseRutinaFromMarkdown, LS_RUTINA_KEY } from '../types'
+import { Bot, Dumbbell, Salad, Loader2, Copy, Check, AlertTriangle, PlayCircle, X } from 'lucide-react'
 
 type Objetivo = 'perdida_grasa' | 'ganancia_muscular' | 'recomposicion' | 'mantenimiento'
 type Nivel = 'principiante' | 'intermedio' | 'avanzado'
@@ -123,8 +123,11 @@ export function CoachPage() {
       `Objetivo: ${OBJETIVO_LABELS[objetivo]}`,
       `Nivel: ${NIVEL_LABELS[nivel]}`,
       `Días disponibles por semana: ${dias}`,
-      restricciones && `Restricciones/lesiones: ${restricciones}`,
     ].filter(Boolean).join('\n')
+
+    const restriccionesContext = restricciones.trim()
+      ? `\nRESTRICCIONES / LESIONES / PREFERENCIAS (OBLIGATORIO RESPETAR):\n${restricciones.trim()}\n`
+      : ''
 
     const medidasStr = lastCheckin
       ? [
@@ -145,11 +148,11 @@ export function CoachPage() {
       ? `\nINSTRUCCIONES ESPECÍFICAS (prioridad alta):\n${instrucciones.trim()}\n`
       : ''
 
-    return { userData, medidasStr, imageContext, imageUrls, instruccionesContext }
+    return { userData, medidasStr, imageContext, imageUrls, instruccionesContext, restriccionesContext }
   }
 
   const buildRutinaPrompt = () => {
-    const { userData, medidasStr, imageContext, instruccionesContext } = buildContext()
+    const { userData, medidasStr, imageContext, instruccionesContext, restriccionesContext } = buildContext()
     // imageUrls se obtiene por separado en generate()
 
     // Detección de duplicados solo en este prompt (se ejecuta una sola vez)
@@ -164,19 +167,22 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-${imageContext}${duplicateInstruction}${instruccionesContext}
+${restriccionesContext}${imageContext}${duplicateInstruction}${instruccionesContext}
 Genera una RUTINA SEMANAL con:
 - Distribución clara de días (ej: Lunes - Pecho/Tríceps, etc.)
 - Para cada ejercicio: series, repeticiones, descanso y notas de forma
 - Calentamiento y enfriamiento
 - Progresión sugerida para las próximas semanas
-- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
+- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}${restricciones.trim() ? '\n- Cualquier ejercicio que afecte las restricciones/lesiones declaradas debe ser eliminado o reemplazado por una alternativa segura' : ''}${hasImages ? '\n- Observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
 
-Formato: usa markdown con headers (##), listas y tablas donde sea útil. Sé específico y práctico.`
+IMPORTANTE — formato de ejercicios: al final del nombre de cada ejercicio principal (no en calentamiento ni tips), agregá la etiqueta \`[video: término de búsqueda]\` con un término preciso para buscar el tutorial en YouTube, adecuado al nivel ${NIVEL_LABELS[nivel]}. Ejemplo:
+- **Sentadilla con barra** [video: sentadilla con barra técnica principiante]
+
+Formato general: usa markdown con headers (##), listas y tablas donde sea útil. Sé específico y práctico.`
   }
 
   const buildAlimentacionPrompt = () => {
-    const { userData, medidasStr, imageContext, instruccionesContext } = buildContext()
+    const { userData, medidasStr, imageContext, instruccionesContext, restriccionesContext } = buildContext()
     // imageUrls se obtiene por separado en generate()
     return `Eres un nutricionista deportivo experto. Genera un plan de alimentación detallado y personalizado.
 
@@ -185,14 +191,14 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-${imageContext}${instruccionesContext}
+${restriccionesContext}${imageContext}${instruccionesContext}
 Genera un PLAN DE ALIMENTACIÓN con:
 - Calorías totales diarias recomendadas (con cálculo basado en datos)
 - Distribución de macros (proteínas, carbohidratos, grasas) en gramos y porcentajes
 - Plan de comidas para un día típico (desayuno, almuerzo, merienda, cena, snacks)
 - Lista de alimentos recomendados y a evitar
 - Timing de nutrientes alrededor del entrenamiento
-- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
+- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${restricciones.trim() ? '\n- Los alimentos, ingredientes o patrones alimentarios que contradigan las restricciones/preferencias declaradas deben ser eliminados del plan sin excepción' : ''}${hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
 
 Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutricionales aproximados.`
   }
@@ -271,6 +277,17 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     if (err) setError((err as any).message ?? 'Error al conectar con el Coach IA.')
   }
 
+  const [showConfirmRutina, setShowConfirmRutina] = useState(false)
+  const [rutinaGuardada, setRutinaGuardada] = useState(false)
+
+  const handleUsarRutina = () => {
+    if (!resultRutina) return
+    const rutina = parseRutinaFromMarkdown(resultRutina, OBJETIVO_LABELS[objetivo], NIVEL_LABELS[nivel])
+    localStorage.setItem(LS_RUTINA_KEY, JSON.stringify(rutina))
+    setShowConfirmRutina(false)
+    setRutinaGuardada(true)
+  }
+
   const copy = async (text: string, setCopied: (v: boolean) => void) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -297,9 +314,16 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
       <div className="card flex flex-col gap-4 mb-5">
         {/* Objetivo */}
         <div>
-          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
-            OBJETIVO
-          </label>
+          <div className="flex items-baseline justify-between mb-2">
+            <label className="text-xs font-medium" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+              OBJETIVO
+            </label>
+            {profile?.objetivo && (
+              <span className="text-[11px]" style={{ color: 'var(--color-muted)' }}>
+                Tomado de tu perfil — podés cambiarlo
+              </span>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-2">
             {(Object.entries(OBJETIVO_LABELS) as [Objetivo, string][]).map(([key, label]) => (
               <button
@@ -365,14 +389,19 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 
         {/* Restricciones */}
         <div>
-          <label className="block text-xs font-medium mb-2" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
-            RESTRICCIONES / LESIONES <span style={{ fontWeight: 400 }}>(opcional)</span>
+          <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
+            RESTRICCIONES / LESIONES / PREFERENCIAS <span style={{ fontWeight: 400 }}>(opcional)</span>
           </label>
-          <input
+          <p className="text-xs mb-2 leading-relaxed" style={{ color: 'var(--color-muted)', opacity: 0.7 }}>
+            Indicá cualquier condición física, limitación alimentaria o preferencia que el Coach deba respetar al armar tu rutina y dieta.
+          </p>
+          <textarea
             className="input-base"
-            placeholder="Ej: lesión de rodilla, vegetariano, sin gluten…"
+            rows={3}
+            placeholder={"Ejemplos:\n• Lesión de rodilla — evitar sentadillas y impacto\n• Vegetariano / sin gluten / intolerancia a la lactosa\n• Sin acceso a pesas, solo peso corporal\n• Alergia al maní, no me gustan los mariscos"}
             value={restricciones}
             onChange={e => setRestricciones(e.target.value)}
+            style={{ resize: 'none' }}
           />
         </div>
 
@@ -447,6 +476,48 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
       {/* Anchor para scroll automático */}
       <div ref={resultsRef} />
 
+      {/* Modal confirmación usar rutina */}
+      {showConfirmRutina && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={() => setShowConfirmRutina(false)}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-2xl p-6 flex flex-col gap-4"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2">
+              <Dumbbell size={18} color="#7BF0A0" />
+              <h3 className="font-bold text-base" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>
+                Utilizar esta rutina
+              </h3>
+            </div>
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+              Esta rutina se vinculará al calendario de la aplicación y podrás ver tus entrenamientos organizados por día.
+              Si ya tenías una rutina guardada, será reemplazada.
+            </p>
+            <div className="flex gap-3">
+              <button
+                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
+                style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', fontFamily: 'Syne' }}
+                onClick={() => setShowConfirmRutina(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                className="flex-1 py-3 rounded-xl text-sm font-semibold transition-all"
+                style={{ background: 'rgba(123,240,160,0.15)', border: '1px solid #7BF0A0', color: '#7BF0A0', fontFamily: 'Syne' }}
+                onClick={handleUsarRutina}
+              >
+                Vincular al calendario
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Rutina */}
       {(resultRutina || loadingRutina) && (
         <ResultCard
@@ -456,6 +527,8 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
           loading={loadingRutina && !resultRutina}
           copied={copiedRutina}
           onCopy={() => resultRutina && copy(resultRutina, setCopiedRutina)}
+          onUsarRutina={resultRutina ? () => setShowConfirmRutina(true) : undefined}
+          rutinaGuardada={rutinaGuardada}
         />
       )}
 
@@ -475,7 +548,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 }
 
 function ResultCard({
-  title, icon, content, loading, copied, onCopy,
+  title, icon, content, loading, copied, onCopy, onUsarRutina, rutinaGuardada,
 }: {
   title: string
   icon: React.ReactNode
@@ -483,6 +556,8 @@ function ResultCard({
   loading: boolean
   copied: boolean
   onCopy: () => void
+  onUsarRutina?: () => void
+  rutinaGuardada?: boolean
 }) {
   return (
     <div className="card mt-5">
@@ -516,6 +591,28 @@ function ResultCard({
         <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans' }}>
           <MarkdownRenderer content={content ?? ''} />
         </div>
+      )}
+
+      {onUsarRutina && content && !loading && (
+        <button
+          onClick={rutinaGuardada ? undefined : onUsarRutina}
+          className="w-full mt-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+          style={rutinaGuardada ? {
+            background: 'rgba(123,240,160,0.08)',
+            border: '1px solid rgba(123,240,160,0.3)',
+            color: '#7BF0A0',
+            fontFamily: 'Syne',
+            cursor: 'default',
+          } : {
+            background: 'rgba(123,240,160,0.12)',
+            border: '1px solid #7BF0A0',
+            color: '#7BF0A0',
+            fontFamily: 'Syne',
+          }}
+        >
+          <Dumbbell size={14} />
+          {rutinaGuardada ? '✓ Rutina vinculada al calendario' : 'Utilizar rutina'}
+        </button>
       )}
     </div>
   )
@@ -569,14 +666,20 @@ function TableBlock({ rows }: { rows: string[][] }) {
   )
 }
 
+function extractVideo(raw: string): { text: string; videoQuery?: string } {
+  const match = raw.match(/\[video:\s*([^\]]+)\]/)
+  if (!match) return { text: raw }
+  return { text: raw.replace(match[0], '').trim(), videoQuery: match[1].trim() }
+}
+
 type Block =
   | { type: 'h2'; text: string }
   | { type: 'h3'; text: string }
-  | { type: 'bullet'; text: string }
-  | { type: 'numbered'; text: string }
+  | { type: 'bullet'; text: string; videoQuery?: string }
+  | { type: 'numbered'; text: string; videoQuery?: string }
   | { type: 'table'; rows: string[][] }
   | { type: 'empty' }
-  | { type: 'text'; text: string }
+  | { type: 'text'; text: string; videoQuery?: string }
 
 function parseBlocks(content: string): Block[] {
   const lines = content.split('\n')
@@ -595,10 +698,12 @@ function parseBlocks(content: string): Block[] {
       blocks.push({ type: 'h3', text: line.slice(4) })
       i++
     } else if (line.startsWith('- ') || line.startsWith('* ')) {
-      blocks.push({ type: 'bullet', text: line.slice(2) })
+      const { text, videoQuery } = extractVideo(line.slice(2))
+      blocks.push({ type: 'bullet', text, videoQuery })
       i++
     } else if (line.match(/^\d+\./)) {
-      blocks.push({ type: 'numbered', text: line })
+      const { text, videoQuery } = extractVideo(line)
+      blocks.push({ type: 'numbered', text, videoQuery })
       i++
     } else if (line.startsWith('|')) {
       const tableLines: string[] = []
@@ -615,7 +720,8 @@ function parseBlocks(content: string): Block[] {
       blocks.push({ type: 'empty' })
       i++
     } else {
-      blocks.push({ type: 'text', text: line })
+      const { text, videoQuery } = extractVideo(line)
+      blocks.push({ type: 'text', text, videoQuery })
       i++
     }
   }
@@ -623,10 +729,72 @@ function parseBlocks(content: string): Block[] {
   return blocks
 }
 
+function VideoModal({ query, onClose }: { query: string; onClose: () => void }) {
+  const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      style={{ background: 'rgba(0,0,0,0.7)' }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-t-2xl p-5 flex flex-col gap-4"
+        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <PlayCircle size={16} color="#7BF0A0" />
+            <span className="text-sm font-bold" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>
+              Tutorial
+            </span>
+          </div>
+          <button onClick={onClose} style={{ color: 'var(--color-muted)' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-sm" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans' }}>
+          {query}
+        </p>
+        <a
+          href={youtubeUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all"
+          style={{ background: '#ff0000', color: '#fff', fontFamily: 'Syne' }}
+        >
+          <PlayCircle size={16} />
+          Ver en YouTube
+        </a>
+      </div>
+    </div>
+  )
+}
+
 function MarkdownRenderer({ content }: { content: string }) {
   const blocks = parseBlocks(content)
+  const [activeVideo, setActiveVideo] = useState<string | null>(null)
+
+  const VideoBtn = ({ query }: { query: string }) => (
+    <button
+      onClick={() => setActiveVideo(query)}
+      className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs ml-1.5 transition-all"
+      style={{
+        background: 'rgba(255,0,0,0.1)',
+        border: '1px solid rgba(255,0,0,0.3)',
+        color: '#ff6666',
+        verticalAlign: 'middle',
+      }}
+      title={`Ver tutorial: ${query}`}
+    >
+      <PlayCircle size={11} />
+      tutorial
+    </button>
+  )
+
   return (
     <>
+      {activeVideo && <VideoModal query={activeVideo} onClose={() => setActiveVideo(null)} />}
       {blocks.map((block, i) => {
         switch (block.type) {
           case 'h2':
@@ -635,19 +803,32 @@ function MarkdownRenderer({ content }: { content: string }) {
             return <h3 key={i} className="text-sm font-bold mt-3 mb-1" style={{ fontFamily: 'Syne', color: '#f0f0f0' }}>{block.text}</h3>
           case 'bullet':
             return (
-              <div key={i} className="flex gap-2 my-0.5">
+              <div key={i} className="flex gap-2 my-0.5 items-baseline">
                 <span style={{ color: '#7BF0A0' }}>•</span>
-                <span><InlineText text={block.text} /></span>
+                <span>
+                  <InlineText text={block.text} />
+                  {block.videoQuery && <VideoBtn query={block.videoQuery} />}
+                </span>
               </div>
             )
           case 'numbered':
-            return <p key={i} className="my-0.5 pl-1"><InlineText text={block.text} /></p>
+            return (
+              <p key={i} className="my-0.5 pl-1">
+                <InlineText text={block.text} />
+                {block.videoQuery && <VideoBtn query={block.videoQuery} />}
+              </p>
+            )
           case 'table':
             return <TableBlock key={i} rows={block.rows} />
           case 'empty':
             return <div key={i} className="h-2" />
           case 'text':
-            return <p key={i} className="my-0.5"><InlineText text={block.text} /></p>
+            return (
+              <p key={i} className="my-0.5">
+                <InlineText text={block.text} />
+                {block.videoQuery && <VideoBtn query={block.videoQuery} />}
+              </p>
+            )
         }
       })}
     </>

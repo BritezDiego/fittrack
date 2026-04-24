@@ -54,9 +54,9 @@ export function useCheckins(userId: string | undefined) {
 
     if (!data) return
     const withPhotos = data.filter((c: any) => c.checkin_fotos?.length > 0)
-    if (withPhotos.length <= 3) return
+    if (withPhotos.length <= 2) return
 
-    const toDelete = withPhotos.slice(0, withPhotos.length - 3)
+    const toDelete = withPhotos.slice(0, withPhotos.length - 2)
     for (const checkin of toDelete) {
       const paths = (checkin.checkin_fotos as CheckinFoto[])
         .map(f => getStoragePath(f.url))

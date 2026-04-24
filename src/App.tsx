@@ -8,6 +8,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { CheckinPage } from './pages/CheckinPage'
 import { FotosPage } from './pages/FotosPage'
 import { CoachPage } from './pages/CoachPage'
+import { CalendarioPage } from './pages/CalendarioPage'
 import { PerfilPage } from './pages/PerfilPage'
 import { supabase } from './lib/supabase'
 
@@ -56,6 +57,7 @@ function App() {
           <Route path="/checkin" element={<CheckinPage />} />
           <Route path="/fotos" element={<FotosPage />} />
           <Route path="/coach" element={<CoachPage />} />
+          <Route path="/calendario" element={<CalendarioPage />} />
           <Route path="/perfil" element={<PerfilPage />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>

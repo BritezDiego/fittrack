@@ -4,7 +4,7 @@ import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import type { CheckinFoto } from '../types'
 import { MES_LABELS, MEDIDAS_KEYS, MEDIDAS_LABELS, getTipoLabel } from '../types'
-import { Camera, X, Check, RefreshCw, ShieldAlert, Loader2 } from 'lucide-react'
+import { Camera, X, Check, RefreshCw, Loader2, CalendarClock } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 const FOTO_TIPOS: CheckinFoto['tipo'][] = ['frente', 'perfil', 'espalda', 'extra']
@@ -37,7 +37,6 @@ export function CheckinPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showNudityModal, setShowNudityModal] = useState(false)
   const [moderating, setModerating] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [pendingTipo, setPendingTipo] = useState<CheckinFoto['tipo']>('frente')
@@ -118,11 +117,6 @@ export function CheckinPage() {
     }
   }
 
-  const handleAgregarClick = () => {
-    setError(null)
-    setShowNudityModal(true)
-  }
-
   const removeFoto = (idx: number) => {
     setFotos(prev => {
       URL.revokeObjectURL(prev[idx].preview)
@@ -189,6 +183,32 @@ export function CheckinPage() {
       <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>
         Registrá tus medidas de este mes
       </p>
+
+      {/* Banner frecuencia */}
+      {(() => {
+        const ultimo = checkins.length > 0 ? checkins[checkins.length - 1] : null
+        if (!ultimo) return null
+        const dias = Math.floor((Date.now() - new Date(ultimo.created_at).getTime()) / (1000 * 60 * 60 * 24))
+        const status: 'ok' | 'pronto' | 'vencido' = dias <= 21 ? 'ok' : dias <= 35 ? 'pronto' : 'vencido'
+        const color = { ok: '#7BF0A0', pronto: '#fbbf24', vencido: '#f87171' }[status]
+        const msg = {
+          ok: `Último check-in hace ${dias} día${dias !== 1 ? 's' : ''} — sin apuro`,
+          pronto: `Último check-in hace ${dias} días — buen momento para actualizar`,
+          vencido: `Último check-in hace ${dias} días — ¡hora de registrar tu progreso!`,
+        }[status]
+        return (
+          <div className="rounded-xl px-4 py-3 mb-4 flex items-start gap-3"
+               style={{ background: `${color}10`, border: `1px solid ${color}33` }}>
+            <CalendarClock size={15} color={color} className="mt-0.5 shrink-0" />
+            <div>
+              <p className="text-xs font-semibold" style={{ color, fontFamily: 'Syne' }}>{msg}</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+                Recomendado: check-in cada 3-4 semanas para ver cambios reales.
+              </p>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Check-ins anteriores para cargar */}
       {checkins.length > 0 && (
@@ -334,6 +354,17 @@ export function CheckinPage() {
             </p>
           </div>
 
+          {/* Tip de replicabilidad */}
+          <div className="rounded-xl px-3 py-2.5 mb-3 flex items-start gap-2"
+               style={{ background: 'rgba(123,240,160,0.06)', border: '1px solid rgba(123,240,160,0.2)' }}>
+            <span className="text-sm mt-0.5 shrink-0">💡</span>
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+              <span className="font-semibold" style={{ color: '#7BF0A0' }}>Para comparar mejor:</span>{' '}
+              usá siempre el mismo lugar, la misma iluminación, la misma ropa ajustada y las mismas poses.
+              Cuanto más parecidas sean las condiciones, más fácil será notar los cambios reales.
+            </p>
+          </div>
+
           {/* Tipo selector */}
           <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
             {FOTO_TIPOS.map(tipo => (
@@ -403,7 +434,7 @@ export function CheckinPage() {
             ))}
             <button
               type="button"
-              onClick={() => !moderating && handleAgregarClick()}
+              onClick={() => !moderating && fileInputRef.current?.click()}
               disabled={moderating}
               className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 transition-all"
               style={{
@@ -442,52 +473,6 @@ export function CheckinPage() {
         </button>
       </form>
 
-      {/* Modal verificación de contenido */}
-      {showNudityModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-6"
-             style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4"
-               style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                   style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.3)' }}>
-                <ShieldAlert size={18} color="#fbbf24" />
-              </div>
-              <h3 className="font-bold text-base" style={{ fontFamily: 'Syne' }}>Verificación de contenido</h3>
-            </div>
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
-              ¿La foto que vas a subir contiene desnudez explícita (genitales o zona púbica expuesta)?
-            </p>
-            <p className="text-xs" style={{ color: 'var(--color-muted)', fontStyle: 'italic' }}>
-              Todas las fotos son analizadas automáticamente. Si se detecta contenido explícito será bloqueada.
-            </p>
-            <div className="flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNudityModal(false)
-                  fileInputRef.current?.click()
-                }}
-                className="w-full py-3 rounded-xl text-sm font-medium"
-                style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', fontFamily: 'Syne' }}
-              >
-                Sí, contiene desnudez explícita
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowNudityModal(false)
-                  fileInputRef.current?.click()
-                }}
-                className="w-full py-3 rounded-xl text-sm font-medium"
-                style={{ background: 'rgba(123,240,160,0.12)', border: '1px solid rgba(123,240,160,0.3)', color: '#7BF0A0', fontFamily: 'Syne' }}
-              >
-                No, es una foto apta
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

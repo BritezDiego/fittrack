@@ -78,3 +78,127 @@ export const MEDIDAS_LABELS: Record<MedidaKey, string> = {
   brazos: 'Brazos (cm)',
   espalda: 'Espalda (cm)',
 }
+
+// ─── Rutina activa (vinculada al calendario) ─────────────────────────────────
+
+export type DiaSemana = 'lunes' | 'martes' | 'miercoles' | 'jueves' | 'viernes' | 'sabado' | 'domingo'
+
+export const ORDEN_DIAS: DiaSemana[] = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo']
+
+export const DIA_LABELS: Record<DiaSemana, string> = {
+  lunes: 'Lunes', martes: 'Martes', miercoles: 'Miércoles',
+  jueves: 'Jueves', viernes: 'Viernes', sabado: 'Sábado', domingo: 'Domingo',
+}
+
+export const DIA_SHORT: Record<DiaSemana, string> = {
+  lunes: 'Lu', martes: 'Ma', miercoles: 'Mi',
+  jueves: 'Ju', viernes: 'Vi', sabado: 'Sá', domingo: 'Do',
+}
+
+// Distribución óptima de días de entrenamiento según cantidad
+const DISTRIBUCIONES: Record<number, DiaSemana[]> = {
+  1: ['miercoles'],
+  2: ['lunes', 'jueves'],
+  3: ['lunes', 'miercoles', 'viernes'],
+  4: ['lunes', 'martes', 'jueves', 'viernes'],
+  5: ['lunes', 'martes', 'miercoles', 'viernes', 'sabado'],
+  6: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'],
+  7: ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'],
+}
+
+export interface RutinaDia {
+  dia: DiaSemana
+  label: string       // "Lunes"
+  musculos: string    // "Pecho / Tríceps"
+  ejercicios: string[]
+  descanso: boolean
+}
+
+export interface RutinaActiva {
+  id: string
+  creadaEn: string
+  objetivo: string
+  nivel: string
+  dias: RutinaDia[]
+  textoCompleto: string
+}
+
+export const LS_RUTINA_KEY = 'fittrack_rutina_activa'
+
+const DIAS_ALIAS: Record<string, DiaSemana> = {
+  lunes: 'lunes',
+  martes: 'martes',
+  'miércoles': 'miercoles',
+  miercoles: 'miercoles',
+  jueves: 'jueves',
+  viernes: 'viernes',
+  'sábado': 'sabado',
+  sabado: 'sabado',
+  domingo: 'domingo',
+}
+
+export function parseRutinaFromMarkdown(
+  text: string,
+  objetivo: string,
+  nivel: string,
+): RutinaActiva {
+  const lines = text.split('\n')
+
+  // 1. Extraer slots de entrenamiento en orden (ignorar el día que asignó la IA)
+  type Slot = { musculos: string; ejercicios: string[] }
+  const slots: Slot[] = []
+  let current: Slot | null = null
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      if (current) slots.push(current)
+      current = null
+
+      const header = line.slice(3)
+      const headerLower = header.toLowerCase()
+      const isDayHeader = Object.keys(DIAS_ALIAS).some(d => headerLower.includes(d))
+      if (!isDayHeader) continue
+
+      const sep = header.search(/[-–—]/)
+      const musculos = (sep >= 0 ? header.slice(sep + 1).trim() : header.trim())
+        .replace(/\*\*/g, '').trim()
+      const isDescanso = /descanso|rest|off/i.test(musculos)
+
+      if (!isDescanso) current = { musculos, ejercicios: [] }
+    } else if (current && (line.startsWith('- ') || line.startsWith('* '))) {
+      const raw = line.slice(2)
+        .replace(/\[video:[^\]]+\]/g, '')
+        .replace(/\*\*/g, '')
+        .trim()
+      if (raw.length > 2 && raw.length < 80) current.ejercicios.push(raw)
+    }
+  }
+  if (current) slots.push(current)
+
+  // 2. Distribuir los slots en días óptimos
+  const n = Math.min(slots.length, 7)
+  const diasEntrenamiento = DISTRIBUCIONES[n] ?? DISTRIBUCIONES[7]
+
+  const dias: RutinaDia[] = ORDEN_DIAS.map(dia => {
+    const slotIdx = diasEntrenamiento.indexOf(dia)
+    if (slotIdx >= 0 && slotIdx < slots.length) {
+      return {
+        dia,
+        label: DIA_LABELS[dia],
+        musculos: slots[slotIdx].musculos,
+        ejercicios: slots[slotIdx].ejercicios,
+        descanso: false,
+      }
+    }
+    return { dia, label: DIA_LABELS[dia], musculos: 'Descanso', ejercicios: [], descanso: true }
+  })
+
+  return {
+    id: Date.now().toString(),
+    creadaEn: new Date().toISOString(),
+    objetivo,
+    nivel,
+    dias,
+    textoCompleto: text,
+  }
+}

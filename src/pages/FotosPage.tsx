@@ -3,11 +3,19 @@ import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { MES_LABELS, getTipoLabel } from '../types'
 import type { CheckinFoto, CheckinWithFotos } from '../types'
-import { ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, X, RefreshCw, CalendarClock } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+
+function diasDesdeCheckin(checkin: CheckinWithFotos): number {
+  const now = new Date()
+  const ref = new Date(checkin.created_at)
+  return Math.floor((now.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24))
+}
 
 export function FotosPage() {
   const { user } = useAuth()
   const { checkins, loading, deleteFotos, deleteFoto } = useCheckins(user?.id)
+  const navigate = useNavigate()
   const [mesA, setMesA] = useState<string>('')
   const [mesB, setMesB] = useState<string>('')
   const [sliderPos, setSliderPos] = useState(50)
@@ -20,7 +28,7 @@ export function FotosPage() {
 
   const checkinsConFotos = checkins
     .filter(c => c.checkin_fotos?.length > 0)
-    .slice(-3)
+    .slice(-2)
 
   const options = checkinsConFotos.map(c => ({
     value: c.id,
@@ -79,18 +87,64 @@ export function FotosPage() {
 
   if (checkinsConFotos.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center">
-        <div className="text-6xl mb-4">📷</div>
-        <h2 className="text-2xl font-bold mb-2" style={{ fontFamily: 'Syne' }}>Sin fotos aún</h2>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-6 text-center gap-4">
+        <div className="text-6xl">📷</div>
+        <h2 className="text-2xl font-bold" style={{ fontFamily: 'Syne' }}>Sin fotos aún</h2>
         <p style={{ color: 'var(--color-muted)' }}>Subí fotos en tu próximo check-in para ver tu progreso.</p>
+        <button className="btn-primary mt-2" onClick={() => navigate('/checkin')}>
+          Hacer primer check-in
+        </button>
       </div>
     )
   }
 
+  const ultimoConFotos = checkinsConFotos[checkinsConFotos.length - 1]
+  const diasUltimo = diasDesdeCheckin(ultimoConFotos)
+  const frecuenciaStatus: 'ok' | 'pronto' | 'vencido' =
+    diasUltimo <= 21 ? 'ok' : diasUltimo <= 35 ? 'pronto' : 'vencido'
+  const frecuenciaColor = { ok: '#7BF0A0', pronto: '#fbbf24', vencido: '#f87171' }[frecuenciaStatus]
+  const frecuenciaMsg = {
+    ok: `Actualizado hace ${diasUltimo} día${diasUltimo !== 1 ? 's' : ''} — sin apuro`,
+    pronto: `Hace ${diasUltimo} días — buen momento para actualizar`,
+    vencido: `Hace ${diasUltimo} días — ¡es hora de actualizar!`,
+  }[frecuenciaStatus]
+
   return (
     <div className="px-4 pt-8 pb-6">
       <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: 'Syne' }}>Fotos</h1>
-      <p className="text-sm mb-6" style={{ color: 'var(--color-muted)' }}>Historial y comparación de progreso</p>
+      <p className="text-sm mb-4" style={{ color: 'var(--color-muted)' }}>Historial y comparación de progreso</p>
+
+      {/* Banner frecuencia + botón actualizar */}
+      <div className="rounded-2xl p-4 mb-6 flex flex-col gap-3"
+           style={{ background: 'var(--color-surface)', border: `1px solid ${frecuenciaColor}33` }}>
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+               style={{ background: `${frecuenciaColor}18` }}>
+            <CalendarClock size={15} color={frecuenciaColor} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold" style={{ color: frecuenciaColor, fontFamily: 'Syne' }}>
+              {frecuenciaMsg}
+            </p>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+              Recomendado: actualizar cada 3-4 semanas. Los cambios físicos tardan ese tiempo en hacerse visibles.
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/checkin')}
+          className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold transition-all"
+          style={{
+            background: `${frecuenciaColor}15`,
+            border: `1px solid ${frecuenciaColor}66`,
+            color: frecuenciaColor,
+            fontFamily: 'Syne',
+          }}
+        >
+          <RefreshCw size={14} />
+          Actualizar progreso
+        </button>
+      </div>
 
       {/* Historial de progreso */}
       <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>

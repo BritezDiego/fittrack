@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { BarChart2, PlusCircle, Camera, Bot, User } from 'lucide-react'
+import { BarChart2, PlusCircle, Camera, Bot, User, CalendarDays } from 'lucide-react'
 
 const tabs = [
   { to: '/dashboard', icon: BarChart2, label: 'Progreso' },
   { to: '/checkin', icon: PlusCircle, label: 'Check-in' },
   { to: '/fotos', icon: Camera, label: 'Fotos' },
   { to: '/coach', icon: Bot, label: 'Coach IA' },
+  { to: '/calendario', icon: CalendarDays, label: 'Rutina' },
   { to: '/perfil', icon: User, label: 'Perfil' },
 ]
 
