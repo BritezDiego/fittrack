@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
@@ -12,6 +13,7 @@ const SS_RUTINA = 'coach_result_rutina'
 const SS_ALIMENTACION = 'coach_result_alimentacion'
 
 export function CoachPage() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { profile } = useProfile(user?.id)
   const { checkins } = useCheckins(user?.id)
@@ -59,6 +61,8 @@ export function CoachPage() {
   const [error, setError] = useState<string | null>(null)
   const [copiedRutina, setCopiedRutina] = useState(false)
   const [copiedAlimentacion, setCopiedAlimentacion] = useState(false)
+  const [genRutina, setGenRutina] = useState(true)
+  const [genDieta, setGenDieta] = useState(true)
 
   const resultsRef = useRef<HTMLDivElement>(null)
   const hasResults = !!(resultRutina || resultAlimentacion)
@@ -249,31 +253,36 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
   }
 
   const generate = async () => {
+    if (!genRutina && !genDieta) return
     setError(null)
-    setResultRutina(null)
-    setResultAlimentacion(null)
-    setLoadingRutina(true)
-    setLoadingAlimentacion(true)
+    if (genRutina) setResultRutina(null)
+    if (genDieta) setResultAlimentacion(null)
+    if (genRutina) setLoadingRutina(true)
+    if (genDieta) setLoadingAlimentacion(true)
+    if (genRutina) setRutinaGuardada(false)
 
-    // Scroll to results area as soon as loading starts
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 100)
 
     const { imageUrls } = buildContext()
 
-    const [rutinaErr, alimentacionErr] = await Promise.all([
+    const tasks: Promise<any>[] = []
+    if (genRutina) tasks.push(
       streamResponse(buildRutinaPrompt(), imageUrls, setResultRutina)
         .then(() => null as null)
         .catch((e: any) => e)
-        .finally(() => setLoadingRutina(false)),
+        .finally(() => setLoadingRutina(false))
+    )
+    if (genDieta) tasks.push(
       streamResponse(buildAlimentacionPrompt(), imageUrls, setResultAlimentacion)
         .then(() => null as null)
         .catch((e: any) => e)
-        .finally(() => setLoadingAlimentacion(false)),
-    ])
+        .finally(() => setLoadingAlimentacion(false))
+    )
 
-    const err = rutinaErr ?? alimentacionErr
+    const results = await Promise.all(tasks)
+    const err = results.find(r => r !== null) ?? null
     if (err) setError((err as any).message ?? 'Error al conectar con el Coach IA.')
   }
 
@@ -284,8 +293,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     if (!resultRutina) return
     const rutina = parseRutinaFromMarkdown(resultRutina, OBJETIVO_LABELS[objetivo], NIVEL_LABELS[nivel])
     localStorage.setItem(LS_RUTINA_KEY, JSON.stringify(rutina))
-    setShowConfirmRutina(false)
-    setRutinaGuardada(true)
+    navigate('/calendario')
   }
 
   const copy = async (text: string, setCopied: (v: boolean) => void) => {
@@ -460,10 +468,49 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
         </div>
       )}
 
-      <button className="btn-primary" onClick={generate} disabled={loading}>
+      {/* Selector de qué generar */}
+      <div className="flex gap-3 mb-2">
+        {[
+          { key: 'rutina', label: 'Rutina', val: genRutina, set: setGenRutina },
+          { key: 'dieta', label: 'Plan alimenticio', val: genDieta, set: setGenDieta },
+        ].map(({ key, label, val, set }) => (
+          <button
+            key={key}
+            onClick={() => set(!val)}
+            disabled={loading}
+            style={{
+              flex: 1,
+              padding: '10px 0',
+              borderRadius: '12px',
+              border: val ? '2px solid var(--color-primary)' : '2px solid rgba(255,255,255,0.12)',
+              background: val ? 'rgba(123,240,160,0.12)' : 'rgba(255,255,255,0.04)',
+              color: val ? 'var(--color-primary)' : 'var(--color-muted)',
+              fontFamily: 'Syne',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            {val ? '✓ ' : ''}{label}
+          </button>
+        ))}
+      </div>
+
+      <button
+        className="btn-primary"
+        onClick={generate}
+        disabled={loading || (!genRutina && !genDieta)}
+      >
         {loading
-          ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Generando plan completo…</span>
-          : hasResults ? 'Regenerar plan completo' : 'Generar plan completo'}
+          ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Generando…</span>
+          : (() => {
+              const ambos = genRutina && genDieta
+              const label = ambos ? 'plan completo' : genRutina ? 'rutina' : 'plan alimenticio'
+              const prefix = (genRutina && resultRutina) || (genDieta && resultAlimentacion) ? 'Regenerar' : 'Generar'
+              return `${prefix} ${label}`
+            })()
+        }
       </button>
 
       {error && (
@@ -633,16 +680,16 @@ function InlineText({ text }: { text: string }) {
   )
 }
 
-function TableBlock({ rows }: { rows: string[][] }) {
+function TableBlock({ rows, onVideoClick }: { rows: string[][], onVideoClick?: (query: string) => void }) {
   if (rows.length === 0) return null
   const [header, ...body] = rows
   return (
     <div className="overflow-x-auto my-3">
-      <table className="w-full text-xs border-collapse">
+      <table className="min-w-full text-xs border-collapse">
         <thead>
           <tr>
             {header.map((cell, i) => (
-              <th key={i} className="px-3 py-2 text-left font-semibold"
+              <th key={i} className="px-3 py-2 text-left font-semibold whitespace-nowrap"
                 style={{ background: 'rgba(123,240,160,0.1)', borderBottom: '1px solid rgba(123,240,160,0.3)', color: '#7BF0A0', fontFamily: 'Syne' }}>
                 {cell}
               </th>
@@ -652,12 +699,25 @@ function TableBlock({ rows }: { rows: string[][] }) {
         <tbody>
           {body.map((row, ri) => (
             <tr key={ri}>
-              {row.map((cell, ci) => (
-                <td key={ci} className="px-3 py-2"
-                  style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                  <InlineText text={cell} />
-                </td>
-              ))}
+              {row.map((cell, ci) => {
+                const { text, videoQuery } = extractVideo(cell)
+                return (
+                  <td key={ci} className="px-3 py-2"
+                    style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                    <InlineText text={text} />
+                    {videoQuery && onVideoClick && (
+                      <button
+                        onClick={() => onVideoClick(videoQuery)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs ml-1.5 transition-all"
+                        style={{ background: 'rgba(255,0,0,0.1)', border: '1px solid rgba(255,0,0,0.3)', color: '#ff6666', verticalAlign: 'middle' }}
+                      >
+                        <PlayCircle size={11} />
+                        tutorial
+                      </button>
+                    )}
+                  </td>
+                )
+              })}
             </tr>
           ))}
         </tbody>
@@ -819,7 +879,7 @@ function MarkdownRenderer({ content }: { content: string }) {
               </p>
             )
           case 'table':
-            return <TableBlock key={i} rows={block.rows} />
+            return <TableBlock key={i} rows={block.rows} onVideoClick={setActiveVideo} />
           case 'empty':
             return <div key={i} className="h-2" />
           case 'text':

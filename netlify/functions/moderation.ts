@@ -39,10 +39,7 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const nudity = data.nudity ?? {}
-    const nude =
-      (nudity.sexual_activity ?? 0) > 0.5 ||
-      (nudity.sexual_display ?? 0) > 0.5 ||
-      (nudity.raw ?? 0) > 0.5
+    const nude = (nudity.sexual_activity ?? 0) > 0.5
 
     return new Response(JSON.stringify({ nude }), {
       status: 200,
