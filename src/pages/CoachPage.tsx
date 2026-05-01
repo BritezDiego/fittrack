@@ -62,6 +62,7 @@ export function CoachPage() {
   const [copiedAlimentacion, setCopiedAlimentacion] = useState(false)
   const [genRutina, setGenRutina] = useState(true)
   const [genDieta, setGenDieta] = useState(true)
+  const [pendingGenerate, setPendingGenerate] = useState(false)
 
   const resultsRef = useRef<HTMLDivElement>(null)
   const hasResults = !!(resultRutina || resultAlimentacion)
@@ -77,6 +78,12 @@ export function CoachPage() {
     ...lastCheckinFotos.map(f => f.url),
   ]
   const hasImages = checkinImageUrls.length > 0
+
+  const hasMedidas = !!(lastCheckin && [
+    lastCheckin.peso, lastCheckin.cintura, lastCheckin.abdomen,
+    lastCheckin.gluteos, lastCheckin.muslos, lastCheckin.brazos,
+  ].some(v => v !== null))
+  const hasFotos = lastCheckinConFotos !== null
 
   // Construye el array de URLs y el contexto de imágenes con matching inteligente por tipo
   const buildImageData = () => {
@@ -298,6 +305,14 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     navigate('/calendario')
   }
 
+  const checkAndGenerate = () => {
+    if (!hasMedidas || !hasFotos) {
+      setPendingGenerate(true)
+    } else {
+      generate()
+    }
+  }
+
   const copy = async (text: string, setCopied: (v: boolean) => void) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -503,7 +518,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 
       <button
         className="btn-primary"
-        onClick={generate}
+        onClick={checkAndGenerate}
         disabled={loading || (!genRutina && !genDieta)}
       >
         {loading
@@ -526,6 +541,55 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 
       {/* Anchor para scroll automático */}
       <div ref={resultsRef} />
+
+      {/* Modal datos incompletos */}
+      {pendingGenerate && (() => {
+        const faltante = !hasMedidas && !hasFotos
+          ? 'medidas ni imágenes'
+          : !hasMedidas ? 'medidas' : 'imágenes'
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ background: 'rgba(0,0,0,0.7)' }}
+            onClick={() => setPendingGenerate(false)}
+          >
+            <div
+              className="w-full max-w-lg rounded-t-2xl p-6 flex flex-col gap-4"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} color="#fbbf24" />
+                <h3 className="font-bold text-base" style={{ fontFamily: 'Syne', color: '#fbbf24' }}>
+                  Información incompleta
+                </h3>
+              </div>
+              <p className="text-sm leading-relaxed" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+                No se encontraron <strong style={{ color: 'var(--color-text)' }}>{faltante}</strong> recientes. El plan será menos preciso sin esos datos.
+              </p>
+              <p className="text-xs" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans', opacity: 0.7 }}>
+                Podés registrar un nuevo check-in antes de continuar para un análisis más personalizado.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold"
+                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-muted)', fontFamily: 'Syne' }}
+                  onClick={() => setPendingGenerate(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold"
+                  style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.5)', color: '#fbbf24', fontFamily: 'Syne' }}
+                  onClick={() => { setPendingGenerate(false); generate() }}
+                >
+                  Generar de todas formas
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Modal confirmación usar rutina */}
       {showConfirmRutina && (
