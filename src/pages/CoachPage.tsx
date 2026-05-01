@@ -19,7 +19,6 @@ export function CoachPage() {
   const { checkins } = useCheckins(user?.id)
 
   const lastCheckin = checkins[checkins.length - 1]
-  const prevCheckin = checkins.length >= 2 ? checkins[checkins.length - 2] : null
 
   // Defaults first — synced from profile via useEffect
   const [objetivo, setObjetivo] = useState<Objetivo>('perdida_grasa')
@@ -67,9 +66,12 @@ export function CoachPage() {
   const resultsRef = useRef<HTMLDivElement>(null)
   const hasResults = !!(resultRutina || resultAlimentacion)
 
-  // Fotos: hasta 5 del check-in anterior + 5 del último
-  const prevCheckinFotos = prevCheckin?.checkin_fotos?.slice(0, 5) ?? []
-  const lastCheckinFotos = lastCheckin?.checkin_fotos?.slice(0, 5) ?? []
+  // Fotos: siempre los 2 check-ins más recientes que TIENEN fotos (no necesariamente adyacentes)
+  const checkinsConFotos = checkins.filter(c => (c.checkin_fotos?.length ?? 0) > 0)
+  const lastCheckinConFotos = checkinsConFotos[checkinsConFotos.length - 1] ?? null
+  const prevCheckinConFotos = checkinsConFotos.length >= 2 ? checkinsConFotos[checkinsConFotos.length - 2] : null
+  const prevCheckinFotos = prevCheckinConFotos?.checkin_fotos?.slice(0, 5) ?? []
+  const lastCheckinFotos = lastCheckinConFotos?.checkin_fotos?.slice(0, 5) ?? []
   const checkinImageUrls = [
     ...prevCheckinFotos.map(f => f.url),
     ...lastCheckinFotos.map(f => f.url),
@@ -89,8 +91,8 @@ export function CoachPage() {
     const lines: string[] = []
     let idx = 1
 
-    const prevLabel = prevCheckin ? `${MES_LABELS[prevCheckin.mes]} ${prevCheckin.anio}` : ''
-    const lastLabel = `${MES_LABELS[lastCheckin!.mes]} ${lastCheckin!.anio}`
+    const prevLabel = prevCheckinConFotos ? `${MES_LABELS[prevCheckinConFotos.mes]} ${prevCheckinConFotos.anio}` : ''
+    const lastLabel = lastCheckinConFotos ? `${MES_LABELS[lastCheckinConFotos.mes]} ${lastCheckinConFotos.anio}` : ''
 
     for (const tipo of allTipos) {
       const prev = prevByTipo.get(tipo)
@@ -98,24 +100,24 @@ export function CoachPage() {
       const label = getTipoLabel(tipo)
 
       if (prev && last) {
-        // Ambos meses tienen esta foto → par de comparación
         urls.push(prev.url, last.url)
-        lines.push(`Imágenes ${idx} y ${idx + 1}: "${label}" — ${prevLabel} vs ${lastLabel} (COMPARAR)`)
+        lines.push(`Imágenes ${idx} y ${idx + 1}: zona "${label}" — ${prevLabel} (anterior) vs ${lastLabel} (actual) → COMPARAR progreso en esta zona`)
         idx += 2
       } else if (last && !prev) {
-        // Solo en el último mes → primera vez, sin referencia
         urls.push(last.url)
-        lines.push(`Imagen ${idx}: "${label}" — ${lastLabel} (primera vez registrada, sin foto anterior para comparar)`)
+        lines.push(`Imagen ${idx}: zona "${label}" — ${lastLabel} (sin foto anterior de esta zona para comparar)`)
         idx += 1
       } else if (prev && !last) {
-        // Solo en el mes anterior → no hay foto reciente
         urls.push(prev.url)
-        lines.push(`Imagen ${idx}: "${label}" — ${prevLabel} (no hay foto reciente de este ángulo)`)
+        lines.push(`Imagen ${idx}: zona "${label}" — ${prevLabel} (sin foto reciente de esta zona)`)
         idx += 1
       }
     }
 
-    const imageContext = `\nFOTOS ADJUNTAS (${urls.length} en total):\n${lines.join('\n')}\n`
+    const hasPares = prevLabel && lastLabel && lines.some(l => l.includes('COMPARAR'))
+    const imageContext = hasPares
+      ? `\nFOTOS COMPARATIVAS POR ZONA MUSCULAR (${urls.length} imágenes, ${prevLabel} vs ${lastLabel}):\nOBLIGATORIO: para cada par de fotos del mismo ángulo analizá el progreso visible en esa zona.\n${lines.join('\n')}\n`
+      : `\nFOTOS ADJUNTAS (${urls.length} en total):\n${lines.join('\n')}\n`
     return { urls, imageContext }
   }
 
@@ -202,7 +204,7 @@ Genera un PLAN DE ALIMENTACIÓN con:
 - Plan de comidas para un día típico (desayuno, almuerzo, merienda, cena, snacks)
 - Lista de alimentos recomendados y a evitar
 - Timing de nutrientes alrededor del entrenamiento
-- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${restricciones.trim() ? '\n- Los alimentos, ingredientes o patrones alimentarios que contradigan las restricciones/preferencias declaradas deben ser eliminados del plan sin excepción' : ''}${hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
+- Tips específicos para ${OBJETIVO_LABELS[objetivo]}${restricciones.trim() ? '\n- Los alimentos, ingredientes o patrones alimentarios que contradigan las restricciones/preferencias declaradas deben ser eliminados del plan sin excepción' : ''}${prevCheckinFotos.length > 0 && lastCheckinFotos.length > 0 ? '\n- Analizá el progreso visual zona por zona en las fotos comparativas e indicá cómo la alimentación puede potenciar las zonas con menor avance' : hasImages ? '\n- Observaciones basadas en las fotos sobre la composición corporal actual' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
 
 Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutricionales aproximados.`
   }
@@ -450,17 +452,19 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
             <div className="flex flex-col gap-0.5">
               {prevCheckinFotos.length > 0 && (
                 <div>
-                  <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos {MES_LABELS[prevCheckin!.mes]} {prevCheckin!.anio}: </span>
+                  <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos {MES_LABELS[prevCheckinConFotos!.mes]} {prevCheckinConFotos!.anio}: </span>
                   {prevCheckinFotos.length} foto{prevCheckinFotos.length > 1 ? 's' : ''} ({prevCheckinFotos.map(f => getTipoLabel(f.tipo)).join(', ')})
                 </div>
               )}
-              <div>
-                <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos {MES_LABELS[lastCheckin.mes]} {lastCheckin.anio}: </span>
-                {lastCheckinFotos.length} foto{lastCheckinFotos.length > 1 ? 's' : ''} ({lastCheckinFotos.map(f => getTipoLabel(f.tipo)).join(', ')})
-              </div>
+              {lastCheckinFotos.length > 0 && (
+                <div>
+                  <span style={{ color: '#7BF0A0', fontFamily: 'Syne', fontWeight: 600 }}>✓ Fotos {MES_LABELS[lastCheckinConFotos!.mes]} {lastCheckinConFotos!.anio}: </span>
+                  {lastCheckinFotos.length} foto{lastCheckinFotos.length > 1 ? 's' : ''} ({lastCheckinFotos.map(f => getTipoLabel(f.tipo)).join(', ')})
+                </div>
+              )}
               {prevCheckinFotos.length > 0 && lastCheckinFotos.length > 0 && (
                 <div style={{ color: 'var(--color-muted)', fontStyle: 'italic' }}>
-                  IA comparará ambos check-ins para detectar fotos duplicadas
+                  IA comparará zona por zona ({prevCheckinFotos.map(f => getTipoLabel(f.tipo)).filter(t => lastCheckinFotos.map(f => getTipoLabel(f.tipo)).includes(t)).join(', ') || 'sin coincidencias'})
                 </div>
               )}
             </div>
