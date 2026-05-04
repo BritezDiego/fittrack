@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { useProfile } from '../hooks/useProfile'
 import { OBJETIVO_LABELS, NIVEL_LABELS, MES_LABELS, getTipoLabel, parseRutinaFromMarkdown, LS_RUTINA_KEY } from '../types'
-import { Bot, Dumbbell, Salad, Loader2, Copy, Check, AlertTriangle, PlayCircle, X } from 'lucide-react'
+import { Bot, Dumbbell, Salad, Loader2, Copy, Check, AlertTriangle, PlayCircle, X, ChevronDown } from 'lucide-react'
 
 type Objetivo = 'perdida_grasa' | 'ganancia_muscular' | 'recomposicion' | 'mantenimiento'
 type Nivel = 'principiante' | 'intermedio' | 'avanzado'
@@ -60,9 +60,8 @@ export function CoachPage() {
   const [error, setError] = useState<string | null>(null)
   const [copiedRutina, setCopiedRutina] = useState(false)
   const [copiedAlimentacion, setCopiedAlimentacion] = useState(false)
-  const [genRutina, setGenRutina] = useState(true)
-  const [genDieta, setGenDieta] = useState(true)
   const [pendingGenerate, setPendingGenerate] = useState(false)
+  const [pendingType, setPendingType] = useState<{ doRutina: boolean; doDieta: boolean }>({ doRutina: false, doDieta: false })
 
   const resultsRef = useRef<HTMLDivElement>(null)
   const hasResults = !!(resultRutina || resultAlimentacion)
@@ -261,14 +260,11 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     }
   }
 
-  const generate = async () => {
-    if (!genRutina && !genDieta) return
+  const generate = async (doRutina: boolean, doDieta: boolean) => {
+    if (!doRutina && !doDieta) return
     setError(null)
-    if (genRutina) setResultRutina(null)
-    if (genDieta) setResultAlimentacion(null)
-    if (genRutina) setLoadingRutina(true)
-    if (genDieta) setLoadingAlimentacion(true)
-    if (genRutina) setRutinaGuardada(false)
+    if (doRutina) { setResultRutina(null); setLoadingRutina(true); setRutinaGuardada(false) }
+    if (doDieta) { setResultAlimentacion(null); setLoadingAlimentacion(true) }
 
     setTimeout(() => {
       resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -277,13 +273,13 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     const { imageUrls } = buildContext()
 
     const tasks: Promise<any>[] = []
-    if (genRutina) tasks.push(
+    if (doRutina) tasks.push(
       streamResponse(buildRutinaPrompt(), imageUrls, setResultRutina)
         .then(() => null as null)
         .catch((e: any) => e)
         .finally(() => setLoadingRutina(false))
     )
-    if (genDieta) tasks.push(
+    if (doDieta) tasks.push(
       streamResponse(buildAlimentacionPrompt(), imageUrls, setResultAlimentacion)
         .then(() => null as null)
         .catch((e: any) => e)
@@ -305,11 +301,12 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     navigate('/calendario')
   }
 
-  const checkAndGenerate = () => {
+  const checkAndGenerate = (doRutina: boolean, doDieta: boolean) => {
     if (!hasMedidas || !hasFotos) {
+      setPendingType({ doRutina, doDieta })
       setPendingGenerate(true)
     } else {
-      generate()
+      generate(doRutina, doDieta)
     }
   }
 
@@ -487,50 +484,44 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
         </div>
       )}
 
-      {/* Selector de qué generar */}
-      <div className="flex gap-3 mb-2">
-        {[
-          { key: 'rutina', label: 'Rutina', val: genRutina, set: setGenRutina },
-          { key: 'dieta', label: 'Plan alimenticio', val: genDieta, set: setGenDieta },
-        ].map(({ key, label, val, set }) => (
-          <button
-            key={key}
-            onClick={() => set(!val)}
-            disabled={loading}
-            style={{
-              flex: 1,
-              padding: '10px 0',
-              borderRadius: '12px',
-              border: val ? '2px solid var(--color-primary)' : '2px solid rgba(255,255,255,0.12)',
-              background: val ? 'rgba(123,240,160,0.12)' : 'rgba(255,255,255,0.04)',
-              color: val ? 'var(--color-primary)' : 'var(--color-muted)',
-              fontFamily: 'Syne',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s',
-            }}
-          >
-            {val ? '✓ ' : ''}{label}
-          </button>
-        ))}
+      <div className="flex gap-3 mb-5">
+        <button
+          onClick={() => checkAndGenerate(true, false)}
+          disabled={loading}
+          className="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+          style={{
+            background: 'rgba(123,240,160,0.12)',
+            border: '1px solid rgba(123,240,160,0.5)',
+            color: '#7BF0A0',
+            fontFamily: 'Syne',
+            opacity: loading ? 0.6 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loadingRutina
+            ? <><Loader2 size={15} className="animate-spin" /> Generando…</>
+            : <><Dumbbell size={15} /> {resultRutina ? 'Regenerar rutina' : 'Generar rutina'}</>
+          }
+        </button>
+        <button
+          onClick={() => checkAndGenerate(false, true)}
+          disabled={loading}
+          className="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+          style={{
+            background: 'rgba(123,200,255,0.1)',
+            border: '1px solid rgba(123,200,255,0.4)',
+            color: '#7bc8ff',
+            fontFamily: 'Syne',
+            opacity: loading ? 0.6 : 1,
+            cursor: loading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {loadingAlimentacion
+            ? <><Loader2 size={15} className="animate-spin" /> Generando…</>
+            : <><Salad size={15} /> {resultAlimentacion ? 'Regenerar dieta' : 'Generar dieta'}</>
+          }
+        </button>
       </div>
-
-      <button
-        className="btn-primary"
-        onClick={checkAndGenerate}
-        disabled={loading || (!genRutina && !genDieta)}
-      >
-        {loading
-          ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Generando…</span>
-          : (() => {
-              const ambos = genRutina && genDieta
-              const label = ambos ? 'plan completo' : genRutina ? 'rutina' : 'plan alimenticio'
-              const prefix = (genRutina && resultRutina) || (genDieta && resultAlimentacion) ? 'Regenerar' : 'Generar'
-              return `${prefix} ${label}`
-            })()
-        }
-      </button>
 
       {error && (
         <div className="rounded-xl px-4 py-3 mt-4 text-sm"
@@ -549,12 +540,12 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
           : !hasMedidas ? 'medidas' : 'imágenes'
         return (
           <div
-            className="fixed inset-0 z-50 flex items-end justify-center"
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
             style={{ background: 'rgba(0,0,0,0.7)' }}
             onClick={() => setPendingGenerate(false)}
           >
             <div
-              className="w-full max-w-lg rounded-t-2xl p-6 flex flex-col gap-4"
+              className="w-full max-w-lg rounded-2xl p-6 flex flex-col gap-4"
               style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
               onClick={e => e.stopPropagation()}
             >
@@ -581,7 +572,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
                 <button
                   className="flex-1 py-3 rounded-xl text-sm font-semibold"
                   style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.5)', color: '#fbbf24', fontFamily: 'Syne' }}
-                  onClick={() => { setPendingGenerate(false); generate() }}
+                  onClick={() => { setPendingGenerate(false); generate(pendingType.doRutina, pendingType.doDieta) }}
                 >
                   Generar de todas formas
                 </button>
@@ -594,12 +585,12 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
       {/* Modal confirmación usar rutina */}
       {showConfirmRutina && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
           style={{ background: 'rgba(0,0,0,0.7)' }}
           onClick={() => setShowConfirmRutina(false)}
         >
           <div
-            className="w-full max-w-lg rounded-t-2xl p-6 flex flex-col gap-4"
+            className="w-full max-w-lg rounded-2xl p-6 flex flex-col gap-4"
             style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
             onClick={e => e.stopPropagation()}
           >
@@ -639,11 +630,12 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
           title="Rutina semanal"
           icon={<Dumbbell size={14} color="#7BF0A0" />}
           content={resultRutina}
-          loading={loadingRutina && !resultRutina}
+          loading={loadingRutina}
           copied={copiedRutina}
           onCopy={() => resultRutina && copy(resultRutina, setCopiedRutina)}
-          onUsarRutina={resultRutina ? () => setShowConfirmRutina(true) : undefined}
+          onUsarRutina={resultRutina && !loadingRutina ? () => setShowConfirmRutina(true) : undefined}
           rutinaGuardada={rutinaGuardada}
+          isRutina
         />
       )}
 
@@ -663,7 +655,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
 }
 
 function ResultCard({
-  title, icon, content, loading, copied, onCopy, onUsarRutina, rutinaGuardada,
+  title, icon, content, loading, copied, onCopy, onUsarRutina, rutinaGuardada, isRutina,
 }: {
   title: string
   icon: React.ReactNode
@@ -673,6 +665,7 @@ function ResultCard({
   onCopy: () => void
   onUsarRutina?: () => void
   rutinaGuardada?: boolean
+  isRutina?: boolean
 }) {
   return (
     <div className="card mt-5">
@@ -681,7 +674,7 @@ function ResultCard({
           {icon}
           <h3 className="font-bold text-sm" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>{title}</h3>
         </div>
-        {content && (
+        {content && !loading && (
           <button
             onClick={onCopy}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
@@ -698,10 +691,12 @@ function ResultCard({
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 py-4" style={{ color: 'var(--color-muted)' }}>
+        <div className="flex items-center gap-2 py-6" style={{ color: 'var(--color-muted)' }}>
           <Loader2 size={14} className="animate-spin" />
-          <span className="text-sm">Generando…</span>
+          <span className="text-sm">Generando{content ? ` (${content.length} caracteres…)` : '…'}</span>
         </div>
+      ) : isRutina && content ? (
+        <RutinaAccordion content={content} />
       ) : (
         <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans' }}>
           <MarkdownRenderer content={content ?? ''} />
@@ -729,6 +724,69 @@ function ResultCard({
           {rutinaGuardada ? '✓ Rutina vinculada al calendario' : 'Utilizar rutina'}
         </button>
       )}
+    </div>
+  )
+}
+
+function parseRutinaSections(markdown: string): { title: string; content: string }[] {
+  const sections: { title: string; content: string }[] = []
+  const lines = markdown.split('\n')
+  let current: { title: string; lines: string[] } | null = null
+
+  for (const line of lines) {
+    if (line.startsWith('## ')) {
+      if (current) sections.push({ title: current.title, content: current.lines.join('\n').trim() })
+      current = { title: line.slice(3).trim(), lines: [] }
+    } else if (current) {
+      current.lines.push(line)
+    }
+  }
+  if (current) sections.push({ title: current.title, content: current.lines.join('\n').trim() })
+  return sections
+}
+
+function RutinaAccordion({ content }: { content: string }) {
+  const sections = parseRutinaSections(content)
+  const [openIdx, setOpenIdx] = useState<number | null>(0)
+
+  if (sections.length === 0) {
+    return (
+      <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans' }}>
+        <MarkdownRenderer content={content} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      {sections.map((section, i) => (
+        <div key={i} className="rounded-xl overflow-hidden"
+             style={{ border: `1px solid ${openIdx === i ? 'rgba(123,240,160,0.4)' : 'var(--color-border)'}` }}>
+          <button
+            className="w-full flex items-center justify-between px-4 py-3 text-left transition-all"
+            style={{ background: openIdx === i ? 'rgba(123,240,160,0.08)' : 'var(--color-surface-2)' }}
+            onClick={() => setOpenIdx(openIdx === i ? null : i)}
+          >
+            <span className="text-sm font-semibold pr-2" style={{ fontFamily: 'Syne', color: openIdx === i ? '#7BF0A0' : 'var(--color-text)' }}>
+              {section.title}
+            </span>
+            <ChevronDown
+              size={14}
+              style={{
+                color: 'var(--color-muted)',
+                transform: openIdx === i ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s',
+                flexShrink: 0,
+              }}
+            />
+          </button>
+          {openIdx === i && section.content && (
+            <div className="px-4 py-3 text-sm leading-relaxed" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans', borderTop: '1px solid var(--color-border)' }}>
+              <MarkdownRenderer content={section.content} />
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   )
 }
@@ -861,12 +919,12 @@ function VideoModal({ query, onClose }: { query: string; onClose: () => void }) 
   const youtubeUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       style={{ background: 'rgba(0,0,0,0.7)' }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-t-2xl p-5 flex flex-col gap-4"
+        className="w-full max-w-lg rounded-2xl p-5 flex flex-col gap-4"
         style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
         onClick={e => e.stopPropagation()}
       >

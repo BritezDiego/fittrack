@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useCheckins } from '../hooks/useCheckins'
 import { MES_LABELS, getTipoLabel } from '../types'
 import type { CheckinFoto, CheckinWithFotos } from '../types'
-import { ChevronLeft, ChevronRight, Trash2, X, RefreshCw, CalendarClock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, X, RefreshCw, CalendarClock, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 function diasDesdeCheckin(checkin: CheckinWithFotos): number {
@@ -26,9 +26,10 @@ export function FotosPage() {
   const [deletingSet, setDeletingSet] = useState(false)
   const [deletingFoto, setDeletingFoto] = useState(false)
 
-  const checkinsConFotos = checkins
-    .filter(c => c.checkin_fotos?.length > 0)
-    .slice(-2)
+  const [fotoA, setFotoA] = useState<string>('')
+  const [fotoB, setFotoB] = useState<string>('')
+
+  const checkinsConFotos = checkins.filter(c => c.checkin_fotos?.length > 0)
 
   const options = checkinsConFotos.map(c => ({
     value: c.id,
@@ -38,8 +39,20 @@ export function FotosPage() {
   const cA = checkinsConFotos.find(c => c.id === mesA)
   const cB = checkinsConFotos.find(c => c.id === mesB)
 
-  const getMainFoto = (c: CheckinWithFotos) =>
-    c.checkin_fotos?.find(f => f.tipo === 'frente')?.url ?? c.checkin_fotos?.[0]?.url
+  const getDefaultFoto = (c: CheckinWithFotos) =>
+    c.checkin_fotos?.find(f => f.tipo === 'frente')?.url ?? c.checkin_fotos?.[0]?.url ?? ''
+
+  const handleSetMesA = (id: string) => {
+    setMesA(id)
+    const c = checkinsConFotos.find(x => x.id === id)
+    setFotoA(c ? getDefaultFoto(c) : '')
+  }
+
+  const handleSetMesB = (id: string) => {
+    setMesB(id)
+    const c = checkinsConFotos.find(x => x.id === id)
+    setFotoB(c ? getDefaultFoto(c) : '')
+  }
 
   const handleDeleteSet = async (checkinId: string) => {
     setDeletingSet(true)
@@ -265,26 +278,64 @@ export function FotosPage() {
           <p className="text-xs font-medium mb-3" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
             COMPARAR ANTES / DESPUÉS
           </p>
-          <div className="flex gap-3 mb-4">
+          <div className="flex gap-3 mb-3">
             <div className="flex-1">
               <label className="block text-xs mb-1.5" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>ANTES</label>
-              <select className="input-base" value={mesA} onChange={e => setMesA(e.target.value)}>
+              <select className="input-base" value={mesA} onChange={e => handleSetMesA(e.target.value)}>
                 <option value="">Seleccionar</option>
                 {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
             <div className="flex-1">
               <label className="block text-xs mb-1.5" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>DESPUÉS</label>
-              <select className="input-base" value={mesB} onChange={e => setMesB(e.target.value)}>
+              <select className="input-base" value={mesB} onChange={e => handleSetMesB(e.target.value)}>
                 <option value="">Seleccionar</option>
                 {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>
 
+          {/* Selectores de foto por check-in */}
+          {(cA || cB) && (
+            <div className="flex gap-3 mb-4">
+              <div className="flex-1">
+                {cA && cA.checkin_fotos.length > 1 && (
+                  <>
+                    <p className="text-[10px] mb-1.5" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>FOTO ANTES</p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {cA.checkin_fotos.map(f => (
+                        <button key={f.id} onClick={() => setFotoA(f.url)}
+                                className="rounded-lg overflow-hidden shrink-0 transition-all"
+                                style={{ width: 52, aspectRatio: '3/4', outline: fotoA === f.url ? '2px solid #7BF0A0' : '2px solid transparent', outlineOffset: 2 }}>
+                          <img src={f.url} alt={f.tipo} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <div className="flex-1">
+                {cB && cB.checkin_fotos.length > 1 && (
+                  <>
+                    <p className="text-[10px] mb-1.5" style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>FOTO DESPUÉS</p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {cB.checkin_fotos.map(f => (
+                        <button key={f.id} onClick={() => setFotoB(f.url)}
+                                className="rounded-lg overflow-hidden shrink-0 transition-all"
+                                style={{ width: 52, aspectRatio: '3/4', outline: fotoB === f.url ? '2px solid #7BF0A0' : '2px solid transparent', outlineOffset: 2 }}>
+                          <img src={f.url} alt={f.tipo} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {cA && cB ? (
-            getMainFoto(cA) && getMainFoto(cB) ? (
-              <div className="card overflow-hidden p-0 mb-6">
+            fotoA && fotoB ? (
+              <div className="card overflow-hidden p-0 mb-4">
                 <div className="flex justify-between px-4 py-2" style={{ background: 'var(--color-surface-2)' }}>
                   <span className="text-xs font-medium" style={{ fontFamily: 'Syne', color: '#7BF0A0' }}>
                     {MES_LABELS[cA.mes]} {cA.anio}
@@ -295,11 +346,11 @@ export function FotosPage() {
                 </div>
                 <div ref={sliderRef} className="relative select-none overflow-hidden"
                      style={{ aspectRatio: '3/4', cursor: 'ew-resize' }}>
-                  <img src={getMainFoto(cB)!} alt="después"
+                  <img src={fotoB} alt="después"
                        className="absolute inset-0 w-full h-full object-cover" draggable={false}
                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }} />
                   <div className="absolute inset-0 overflow-hidden" style={{ width: `${sliderPos}%` }}>
-                    <img src={getMainFoto(cA)!} alt="antes"
+                    <img src={fotoA} alt="antes"
                          className="absolute inset-0 h-full object-cover"
                          style={{ width: `${(100 / sliderPos) * 100}%`, maxWidth: 'none' }}
                          draggable={false}
@@ -319,17 +370,39 @@ export function FotosPage() {
                 </p>
               </div>
             ) : (
-              <div className="card text-center py-8 mb-6">
-                <p style={{ color: 'var(--color-muted)' }}>Uno de los meses no tiene foto de frente.</p>
+              <div className="card text-center py-8 mb-4">
+                <p style={{ color: 'var(--color-muted)' }}>Uno de los meses no tiene fotos disponibles.</p>
               </div>
             )
           ) : (
-            <div className="card flex flex-col items-center py-10 text-center mb-6"
+            <div className="card flex flex-col items-center py-10 text-center mb-4"
                  style={{ border: '1px dashed var(--color-border)' }}>
               <p className="text-3xl mb-3">🖼️</p>
-              <p style={{ color: 'var(--color-muted)' }}>Seleccioná dos meses para comparar.</p>
+              <p style={{ color: 'var(--color-muted)' }}>Seleccioná dos períodos para comparar.</p>
             </div>
           )}
+
+          {/* Banner IA Coach */}
+          <div className="rounded-2xl p-4 mb-6 flex items-start gap-3"
+               style={{ background: 'rgba(123,240,160,0.06)', border: '1px solid rgba(123,240,160,0.2)' }}>
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                 style={{ background: 'rgba(123,240,160,0.12)' }}>
+              <Sparkles size={15} color="#7BF0A0" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold mb-0.5" style={{ color: '#7BF0A0', fontFamily: 'Syne' }}>
+                ¿Querés un análisis más profundo?
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+                Generá tu plan en la pestaña <span style={{ color: 'var(--color-text)' }}>Coach IA</span> para obtener un análisis detallado de tu evolución física, recomendaciones personalizadas y ajustes a tu entrenamiento basados en tus fotos y medidas.
+              </p>
+              <button onClick={() => navigate('/coach')}
+                      className="mt-2.5 text-xs font-semibold px-3 py-1.5 rounded-xl transition-all"
+                      style={{ background: 'rgba(123,240,160,0.15)', border: '1px solid rgba(123,240,160,0.35)', color: '#7BF0A0', fontFamily: 'Syne' }}>
+                Ir a Coach IA →
+              </button>
+            </div>
+          </div>
         </>
       )}
     </div>

@@ -334,10 +334,10 @@ export function CalendarioPage() {
 
       {/* Modal eliminar */}
       {confirmEliminar && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center"
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4"
              style={{ background: 'rgba(0,0,0,0.7)' }}
              onClick={() => setConfirmEliminar(false)}>
-          <div className="w-full max-w-lg rounded-t-2xl p-6 flex flex-col gap-4"
+          <div className="w-full max-w-lg rounded-2xl p-6 flex flex-col gap-4"
                style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
                onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-base" style={{ fontFamily: 'Syne' }}>¿Eliminar rutina?</h3>
