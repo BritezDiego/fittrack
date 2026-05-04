@@ -171,6 +171,8 @@ export function CoachPage() {
       ? `\nANTES DE ANALIZAR: Compará minuciosamente las fotos de ambos check-ins para detectar si alguna imagen fue reutilizada entre meses. La clienta puede estar en ropa interior o ropa deportiva ajustada — examiná con detalle: posición corporal exacta, ángulo, iluminación, sombras, marcas en la piel, ropa, accesorios, fondo. Si encontrás fotos idénticas o muy similares entre meses, indicalo claramente al inicio de tu respuesta antes del plan. Si todas son distintas, confirmalo también.\n`
       : ''
 
+    const diasLabels = Array.from({ length: dias }, (_, i) => `Día ${i + 1}`).join(', ')
+
     return `Eres un coach fitness experto. Genera una rutina semanal detallada y personalizada.
 
 DATOS DEL USUARIO:
@@ -179,17 +181,34 @@ ${userData}
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
 ${restriccionesContext}${imageContext}${duplicateInstruction}${instruccionesContext}
-Genera una RUTINA SEMANAL con:
-- Distribución clara de días (ej: Lunes - Pecho/Tríceps, etc.)
-- Para cada ejercicio: series, repeticiones, descanso y notas de forma
-- Calentamiento y enfriamiento
-- Progresión sugerida para las próximas semanas
-- Tips específicos para su objetivo de ${OBJETIVO_LABELS[objetivo]}${restricciones.trim() ? '\n- Cualquier ejercicio que afecte las restricciones/lesiones declaradas debe ser eliminado o reemplazado por una alternativa segura' : ''}${hasImages ? '\n- Observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
+ESTRUCTURA OBLIGATORIA DE LA RESPUESTA — seguí exactamente este orden de secciones:
 
-IMPORTANTE — formato de ejercicios: al final del nombre de cada ejercicio principal (no en calentamiento ni tips), agregá la etiqueta \`[video: término de búsqueda]\` con un término preciso para buscar el tutorial en YouTube, adecuado al nivel ${NIVEL_LABELS[nivel]}. Ejemplo:
-- **Sentadilla con barra** [video: sentadilla con barra técnica principiante]
+## Calentamiento general
+(describí el calentamiento aplicable a todos los días)
 
-Formato general: usa markdown con headers (##), listas y tablas donde sea útil. Sé específico y práctico.`
+## Día 1 — [nombre del grupo muscular]
+(ejercicios del día 1)
+
+## Día 2 — [nombre del grupo muscular]
+(ejercicios del día 2)
+
+... continuá hasta ## Día ${dias} — [grupo muscular]
+
+## Progresión sugerida
+(progresión para las próximas semanas)
+
+## Tips y recomendaciones
+(tips para el objetivo de ${OBJETIVO_LABELS[objetivo]})
+
+REGLAS DE FORMATO — OBLIGATORIAS:
+- Generá EXACTAMENTE ${dias} días de entrenamiento: ${diasLabels}
+- Cada día de entrenamiento DEBE ser una sección ## (no ###, no tabla, no lista)
+- El título de cada día DEBE seguir el formato exacto: ## Día N — [grupos musculares]
+- Dentro de cada día listá los ejercicios con: series, repeticiones, descanso y nota de forma
+- NO uses tablas para los días; usá listas con guiones (-)${restricciones.trim() ? '\n- Cualquier ejercicio que afecte las restricciones/lesiones declaradas debe ser eliminado o reemplazado por una alternativa segura' : ''}${hasImages ? '\n- Incluí observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
+
+ETIQUETAS DE VIDEO — al final del nombre de cada ejercicio principal (no en calentamiento ni tips), agregá \`[video: término de búsqueda]\` con un término preciso para YouTube, adecuado al nivel ${NIVEL_LABELS[nivel]}. Ejemplo:
+- **Sentadilla con barra** [video: sentadilla con barra técnica principiante]`
   }
 
   const buildAlimentacionPrompt = () => {
