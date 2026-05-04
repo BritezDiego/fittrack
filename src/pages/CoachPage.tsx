@@ -64,7 +64,6 @@ export function CoachPage() {
   const [pendingType, setPendingType] = useState<{ doRutina: boolean; doDieta: boolean }>({ doRutina: false, doDieta: false })
 
   const resultsRef = useRef<HTMLDivElement>(null)
-  const hasResults = !!(resultRutina || resultAlimentacion)
 
   // Fotos: siempre los 2 check-ins más recientes que TIENEN fotos (no necesariamente adyacentes)
   const checkinsConFotos = checkins.filter(c => (c.checkin_fotos?.length ?? 0) > 0)
