@@ -49,7 +49,7 @@ export default async function handler(req: Request): Promise<Response> {
       try {
         const anthropicStream = client.messages.stream({
           model: 'claude-sonnet-4-6',
-          max_tokens: 2048,
+          max_tokens: 6000,
           messages: [{ role: 'user', content }],
         })
 
