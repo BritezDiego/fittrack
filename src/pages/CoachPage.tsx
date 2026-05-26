@@ -163,12 +163,12 @@ export function CoachPage() {
   }
 
   const buildRutinaPrompt = () => {
-    const { userData, medidasStr, imageContext, instruccionesContext, restriccionesContext } = buildContext()
+    const { userData, medidasStr, instruccionesContext, restriccionesContext } = buildContext()
     // imageUrls se obtiene por separado en generate()
 
-    // Detección de duplicados solo en este prompt (se ejecuta una sola vez)
-    const duplicateInstruction = prevCheckinFotos.length > 0 && lastCheckinFotos.length > 0
-      ? `\nANTES DE ANALIZAR: Compará minuciosamente las fotos de ambos check-ins para detectar si alguna imagen fue reutilizada entre meses. La clienta puede estar en ropa interior o ropa deportiva ajustada — examiná con detalle: posición corporal exacta, ángulo, iluminación, sombras, marcas en la piel, ropa, accesorios, fondo. Si encontrás fotos idénticas o muy similares entre meses, indicalo claramente al inicio de tu respuesta antes del plan. Si todas son distintas, confirmalo también.\n`
+    // Las fotos se usan solo como referencia visual silenciosa — sin secciones de análisis
+    const fotosContext = hasImages
+      ? `\nFOTOS DE REFERENCIA: Se adjuntan fotos del usuario. Usálas únicamente como contexto visual para adaptar los ejercicios a su composición corporal actual. NO generés ninguna sección de análisis ni verificación de fotos.\n`
       : ''
 
     const diasLabels = Array.from({ length: dias }, (_, i) => `Día ${i + 1}`).join(', ')
@@ -180,7 +180,7 @@ ${userData}
 
 MEDIDAS ACTUALES (último check-in):
 ${medidasStr}
-${restriccionesContext}${imageContext}${duplicateInstruction}${instruccionesContext}
+${restriccionesContext}${fotosContext}${instruccionesContext}
 ESTRUCTURA OBLIGATORIA DE LA RESPUESTA — seguí exactamente este orden de secciones:
 
 ## Calentamiento general
@@ -205,7 +205,8 @@ REGLAS DE FORMATO — OBLIGATORIAS:
 - Cada día de entrenamiento DEBE ser una sección ## (no ###, no tabla, no lista)
 - El título de cada día DEBE seguir el formato exacto: ## Día N — [grupos musculares]
 - Dentro de cada día listá los ejercicios con: series, repeticiones, descanso y nota de forma
-- NO uses tablas para los días; usá listas con guiones (-)${restricciones.trim() ? '\n- Cualquier ejercicio que afecte las restricciones/lesiones declaradas debe ser eliminado o reemplazado por una alternativa segura' : ''}${hasImages ? '\n- Incluí observaciones basadas en las fotos sobre áreas a trabajar prioritariamente' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
+- NO uses tablas para los días; usá listas con guiones (-)
+- NO generés ninguna sección de verificación, análisis de fotos, ni comparación de imágenes${restricciones.trim() ? '\n- Cualquier ejercicio que afecte las restricciones/lesiones declaradas debe ser eliminado o reemplazado por una alternativa segura' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
 
 ETIQUETAS DE VIDEO — al final del nombre de cada ejercicio principal (no en calentamiento ni tips), agregá \`[video: término de búsqueda]\` con un término preciso para YouTube, adecuado al nivel ${NIVEL_LABELS[nivel]}. Ejemplo:
 - **Sentadilla con barra** [video: sentadilla con barra técnica principiante]`
