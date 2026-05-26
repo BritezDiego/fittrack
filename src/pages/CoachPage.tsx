@@ -208,8 +208,18 @@ REGLAS DE FORMATO — OBLIGATORIAS:
 - NO uses tablas para los días; usá listas con guiones (-)
 - NO generés ninguna sección de verificación, análisis de fotos, ni comparación de imágenes${restricciones.trim() ? '\n- Cualquier ejercicio que afecte las restricciones/lesiones declaradas debe ser eliminado o reemplazado por una alternativa segura' : ''}${instrucciones.trim() ? '\n- Las instrucciones específicas del usuario deben ser el eje central' : ''}
 
-ETIQUETAS DE VIDEO — al final del nombre de cada ejercicio principal (no en calentamiento ni tips), agregá \`[video: término de búsqueda]\` con un término preciso para YouTube, adecuado al nivel ${NIVEL_LABELS[nivel]}. Ejemplo:
-- **Sentadilla con barra** [video: sentadilla con barra técnica principiante]`
+FORMATO DE EJERCICIOS — OBLIGATORIO para cada ejercicio dentro de los días de entrenamiento (NO en Calentamiento, Progresión ni Tips):
+
+:::ejercicio
+nombre: [nombre completo del ejercicio]
+series: [número entero, ej: 3]
+reps: [ej: 10-12 o 15]
+descanso: [ej: 60s o 90s]
+video: [término de búsqueda YouTube preciso, nivel ${NIVEL_LABELS[nivel]}]
+nota: [instrucción clave de técnica en una sola línea]
+:::
+
+Usá un bloque :::ejercicio::: separado para CADA ejercicio. En Calentamiento, Progresión y Tips escribí en texto normal sin bloques.`
   }
 
   const buildAlimentacionPrompt = () => {
@@ -800,8 +810,14 @@ function RutinaAccordion({ content }: { content: string }) {
             />
           </button>
           {openIdx === i && section.content && (
-            <div className="px-4 py-3 text-sm leading-relaxed" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans', borderTop: '1px solid var(--color-border)' }}>
-              <MarkdownRenderer content={section.content} />
+            <div className="px-4 py-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+              {/^Día \d+/i.test(section.title) ? (
+                <DayContentRenderer content={section.content} />
+              ) : (
+                <div className="text-sm leading-relaxed" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans' }}>
+                  <MarkdownRenderer content={section.content} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -809,6 +825,145 @@ function RutinaAccordion({ content }: { content: string }) {
     </div>
   )
 }
+
+// ─── Exercise Card ──────────────────────────────────────────────────────────
+
+interface EjercicioData {
+  nombre: string
+  series: number
+  reps: string
+  descanso: string
+  video: string
+  nota: string
+}
+
+function parseEjercicioBlock(raw: string): EjercicioData {
+  const lines = raw.trim().split('\n')
+  const get = (key: string) => {
+    const line = lines.find(l => l.toLowerCase().startsWith(key + ':'))
+    return line ? line.slice(key.length + 1).trim() : ''
+  }
+  return {
+    nombre: get('nombre') || 'Ejercicio',
+    series: Math.max(1, parseInt(get('series')) || 3),
+    reps: get('reps') || '10',
+    descanso: get('descanso') || '60s',
+    video: get('video') || '',
+    nota: get('nota') || '',
+  }
+}
+
+function ExerciseCard({ data }: { data: EjercicioData }) {
+  const [kgValues, setKgValues] = useState<string[]>(() => Array(data.series).fill(''))
+  const youtubeUrl = data.video
+    ? `https://www.youtube.com/results?search_query=${encodeURIComponent(data.video)}`
+    : null
+
+  return (
+    <div className="rounded-xl mb-3 overflow-hidden" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
+        <span className="text-sm font-bold pr-3 leading-snug" style={{ color: '#7BF0A0', fontFamily: 'Syne' }}>
+          {data.nombre}
+        </span>
+        {youtubeUrl && (
+          <a
+            href={youtubeUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-all"
+            style={{ background: 'rgba(255,0,0,0.12)', border: '1px solid rgba(255,0,0,0.3)', color: '#ff6666', fontFamily: 'DM Sans' }}
+          >
+            <PlayCircle size={11} />
+            tutorial
+          </a>
+        )}
+      </div>
+
+      {/* Column headers */}
+      <div className="grid grid-cols-3 px-4 pt-2 pb-1 text-xs" style={{ color: 'var(--color-muted)', fontFamily: 'Syne', letterSpacing: '0.06em' }}>
+        <span>SERIE</span>
+        <span>KG</span>
+        <span>REPS</span>
+      </div>
+
+      {/* Rows */}
+      {Array.from({ length: data.series }, (_, i) => (
+        <div
+          key={i}
+          className="grid grid-cols-3 items-center px-4 py-3"
+          style={{
+            borderTop: '1px solid var(--color-border)',
+            background: i % 2 === 1 ? 'rgba(255,255,255,0.02)' : 'transparent',
+          }}
+        >
+          <span className="text-xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'Syne' }}>{i + 1}</span>
+          <input
+            type="number"
+            min={0}
+            value={kgValues[i]}
+            onChange={e => {
+              const next = [...kgValues]
+              next[i] = e.target.value
+              setKgValues(next)
+            }}
+            placeholder="—"
+            className="w-14 text-center text-xl font-bold bg-transparent outline-none"
+            style={{
+              color: kgValues[i] ? 'var(--color-text)' : 'var(--color-muted)',
+              fontFamily: 'Syne',
+              border: '1px solid var(--color-border)',
+              borderRadius: '8px',
+              padding: '2px 0',
+            }}
+          />
+          <span className="text-xl font-bold" style={{ color: 'var(--color-text)', fontFamily: 'Syne' }}>{data.reps}</span>
+        </div>
+      ))}
+
+      {/* Descanso + nota */}
+      {(data.descanso || data.nota) && (
+        <div className="px-4 py-2 flex flex-col gap-0.5" style={{ borderTop: '1px solid var(--color-border)' }}>
+          {data.descanso && (
+            <span className="text-xs" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+              ⏱ Descanso: {data.descanso}
+            </span>
+          )}
+          {data.nota && (
+            <span className="text-xs" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+              💡 {data.nota}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function DayContentRenderer({ content }: { content: string }) {
+  // Split by complete :::ejercicio...:::blocks (ignore incomplete ones during streaming)
+  const parts = content.split(/(:::ejercicio[\s\S]*?:::)/g)
+
+  return (
+    <div>
+      {parts.map((part, i) => {
+        if (part.startsWith(':::ejercicio') && part.endsWith(':::')) {
+          const inner = part.slice(':::ejercicio'.length, -3)
+          return <ExerciseCard key={i} data={parseEjercicioBlock(inner)} />
+        }
+        const trimmed = part.replace(/:::ejercicio[\s\S]*$/, '').trim() // drop partial block at end
+        if (!trimmed) return null
+        return (
+          <div key={i} className="text-sm leading-relaxed mb-2" style={{ color: 'var(--color-text)', fontFamily: 'DM Sans' }}>
+            <MarkdownRenderer content={trimmed} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Text / Markdown helpers ─────────────────────────────────────────────────
 
 // Renderiza texto con soporte para **negrita** inline
 function InlineText({ text }: { text: string }) {
