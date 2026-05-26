@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { CalendarDays, Dumbbell, Coffee, ChevronDown, ChevronUp, Trash2, Pencil, Check, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { CalendarDays, Dumbbell, Coffee, ChevronDown, ChevronUp, Trash2, Pencil, Check, X, Sparkles } from 'lucide-react'
 import type { RutinaActiva, RutinaDia, DiaSemana } from '../types'
 import { LS_RUTINA_KEY, ORDEN_DIAS, DIA_LABELS, DIA_SHORT } from '../types'
 
@@ -15,6 +15,9 @@ function loadRutina(): RutinaActiva | null {
 
 export function CalendarioPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const esNueva = !!(location.state as { nuevo?: boolean } | null)?.nuevo
+
   const [rutina, setRutina] = useState<RutinaActiva | null>(loadRutina)
   const [expandido, setExpandido] = useState<DiaSemana | null>(null)
   const [confirmEliminar, setConfirmEliminar] = useState(false)
@@ -23,6 +26,18 @@ export function CalendarioPage() {
   const [editMode, setEditMode] = useState(false)
   // editDias[i] = día asignado al i-ésimo slot de entrenamiento (en orden de semana)
   const [editDias, setEditDias] = useState<DiaSemana[]>([])
+
+  // Si llegamos desde "Utilizar rutina", abrir edici\u00f3n autom\u00e1ticamente
+  useEffect(() => {
+    if (esNueva && rutina) {
+      const slots = ORDEN_DIAS
+        .map(d => rutina.dias.find(r => r.dia === d))
+        .filter((d): d is RutinaDia => !!d && !d.descanso)
+      setEditDias(slots.map(d => d.dia))
+      setEditMode(true)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const hoy = new Date()
     .toLocaleDateString('es-AR', { weekday: 'long' })
@@ -174,6 +189,21 @@ export function CalendarioPage() {
       {/* ── MODO EDICIÓN ─────────────────────────────────────────────────────── */}
       {editMode && (
         <div className="mb-5">
+          {/* Banner: llegó desde Coach IA */}
+          {esNueva && (
+            <div className="flex items-start gap-3 rounded-xl px-4 py-3 mb-4"
+                 style={{ background: 'rgba(123,240,160,0.07)', border: '1px solid rgba(123,240,160,0.25)' }}>
+              <Sparkles size={15} color="#7BF0A0" className="shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold mb-0.5" style={{ color: '#7BF0A0', fontFamily: 'Syne' }}>
+                  Rutina guardada
+                </p>
+                <p className="text-xs" style={{ color: 'var(--color-muted)', fontFamily: 'DM Sans' }}>
+                  Distribuimos los días automáticamente. Tocá cualquier chip para cambiar qué día hacés cada entrenamiento.
+                </p>
+              </div>
+            </div>
+          )}
           <p className="text-xs font-semibold mb-3 uppercase tracking-wide"
              style={{ color: 'var(--color-muted)', fontFamily: 'Syne' }}>
             Tocá un día para reasignar — si el día ya está ocupado, los slots se intercambian

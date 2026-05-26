@@ -142,38 +142,64 @@ export function parseRutinaFromMarkdown(
   objetivo: string,
   nivel: string,
 ): RutinaActiva {
-  const lines = text.split('\n')
-
-  // 1. Extraer slots de entrenamiento en orden (ignorar el día que asignó la IA)
   type Slot = { musculos: string; ejercicios: string[] }
   const slots: Slot[] = []
-  let current: Slot | null = null
 
-  for (const line of lines) {
-    if (line.startsWith('## ')) {
-      if (current) slots.push(current)
-      current = null
-
-      const header = line.slice(3)
-      const headerLower = header.toLowerCase()
-      const isDayHeader = Object.keys(DIAS_ALIAS).some(d => headerLower.includes(d))
-      if (!isDayHeader) continue
-
-      const sep = header.search(/[-–—]/)
-      const musculos = (sep >= 0 ? header.slice(sep + 1).trim() : header.trim())
-        .replace(/\*\*/g, '').trim()
-      const isDescanso = /descanso|rest|off/i.test(musculos)
-
-      if (!isDescanso) current = { musculos, ejercicios: [] }
-    } else if (current && (line.startsWith('- ') || line.startsWith('* '))) {
-      const raw = line.slice(2)
-        .replace(/\[video:[^\]]+\]/g, '')
-        .replace(/\*\*/g, '')
-        .trim()
-      if (raw.length > 2 && raw.length < 80) current.ejercicios.push(raw)
-    }
+  // 1. Partir el texto en secciones por encabezados ##
+  const sectionRegex = /^## (.+)$/gm
+  const sectionMatches: { title: string; start: number }[] = []
+  let m: RegExpExecArray | null
+  while ((m = sectionRegex.exec(text)) !== null) {
+    sectionMatches.push({ title: m[1].trim(), start: m.index + m[0].length })
   }
-  if (current) slots.push(current)
+
+  for (let i = 0; i < sectionMatches.length; i++) {
+    const { title, start } = sectionMatches[i]
+    const end = i + 1 < sectionMatches.length ? sectionMatches[i + 1].start : text.length
+    const content = text.slice(start, end)
+
+    const titleLower = title.toLowerCase()
+
+    // Detectar sección de día: "Día N" (nuevo formato) o nombre de día (legado)
+    const isDaySection =
+      /^día\s+\d+/i.test(titleLower) ||
+      Object.keys(DIAS_ALIAS).some(d => titleLower.includes(d))
+    if (!isDaySection) continue
+
+    const sep = title.search(/[-–—]/)
+    const musculos = (sep >= 0 ? title.slice(sep + 1).trim() : title.trim())
+      .replace(/\*\*/g, '').trim()
+    if (/descanso|rest|off/i.test(musculos)) continue
+
+    const ejercicios: string[] = []
+
+    // Nuevo formato: bloques :::ejercicio:::
+    const blockRegex = /:::ejercicio([\s\S]*?):::/g
+    let bm: RegExpExecArray | null
+    while ((bm = blockRegex.exec(content)) !== null) {
+      const inner = bm[1]
+      const nombreLine = inner.split('\n').find(l => l.toLowerCase().startsWith('nombre:'))
+      if (nombreLine) {
+        const nombre = nombreLine.slice('nombre:'.length).trim()
+        if (nombre.length > 2) ejercicios.push(nombre)
+      }
+    }
+
+    // Fallback: formato legado con viñetas
+    if (ejercicios.length === 0) {
+      for (const line of content.split('\n')) {
+        if (line.startsWith('- ') || line.startsWith('* ')) {
+          const raw = line.slice(2)
+            .replace(/\[video:[^\]]+\]/g, '')
+            .replace(/\*\*/g, '')
+            .trim()
+          if (raw.length > 2 && raw.length < 80) ejercicios.push(raw)
+        }
+      }
+    }
+
+    slots.push({ musculos, ejercicios })
+  }
 
   // 2. Distribuir los slots en días óptimos
   const n = Math.min(slots.length, 7)

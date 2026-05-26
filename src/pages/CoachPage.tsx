@@ -327,7 +327,7 @@ Formato: usa markdown con headers (##), listas y tablas. Incluye valores nutrici
     if (!resultRutina) return
     const rutina = parseRutinaFromMarkdown(resultRutina, OBJETIVO_LABELS[objetivo], NIVEL_LABELS[nivel])
     localStorage.setItem(LS_RUTINA_KEY, JSON.stringify(rutina))
-    navigate('/calendario')
+    navigate('/calendario', { state: { nuevo: true } })
   }
 
   const checkAndGenerate = (doRutina: boolean, doDieta: boolean) => {
