@@ -30,14 +30,24 @@ export default async function handler(req: Request): Promise<Response> {
     try { new URL(url); return true } catch { return false }
   })
 
+  // Descargar imágenes y convertir a base64 para evitar errores de acceso
+  // (Anthropic no puede acceder a URLs privadas/protegidas de Supabase)
   for (const url of validUrls) {
-    content.push({
-      type: 'image',
-      source: {
-        type: 'url',
-        url,
-      },
-    })
+    try {
+      const res = await fetch(url)
+      if (!res.ok) continue
+      const buffer = await res.arrayBuffer()
+      const base64 = Buffer.from(buffer).toString('base64')
+      const rawType = res.headers.get('content-type') ?? 'image/jpeg'
+      const mediaType = rawType.split(';')[0].trim() as
+        | 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+      content.push({
+        type: 'image',
+        source: { type: 'base64', media_type: mediaType, data: base64 },
+      })
+    } catch {
+      // Si la imagen no se puede descargar, se omite silenciosamente
+    }
   }
 
   content.push({ type: 'text', text: prompt })
